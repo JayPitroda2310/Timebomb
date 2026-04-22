@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💣 Time Bomb Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── LOBBY SCREEN ─────────────────────────────────────────────── -->
+  <div id="screen-lobby" class="screen active">
+    <div class="lobby-bg">
+      <div class="scanlines"></div>
+      <div class="grid-lines"></div>
+    </div>
+    <div class="lobby-content">
+      <div class="logo-wrap">
+        <div class="logo-bomb">💣</div>
+        <h1 class="logo-title">TIME BOMB<br><span>ARENA</span></h1>
+        <p class="logo-sub">Pass the bomb. Don't get caught.</p>
+      </div>
+
+      <div class="lobby-card">
+        <div class="input-row">
+          <label>Your Name</label>
+          <input id="input-name" type="text" maxlength="16" placeholder="Enter name..." autocomplete="off" />
+        </div>
+
+        <div class="lobby-tabs">
+          <button class="tab-btn active" id="tab-create" onclick="showTab('create')">Create Room</button>
+          <button class="tab-btn" id="tab-join" onclick="showTab('join')">Join Room</button>
+        </div>
+
+        <div id="panel-create" class="tab-panel active">
+          <button class="btn-primary" id="btn-create" onclick="createRoom()">
+            <span>⚡ Create Room</span>
+          </button>
+        </div>
+
+        <div id="panel-join" class="tab-panel">
+          <div class="input-row">
+            <label>Room Code</label>
+            <input id="input-room" type="text" maxlength="6" placeholder="ABC123" autocomplete="off"
+                   style="text-transform:uppercase;letter-spacing:4px;font-size:1.4rem;text-align:center;" />
+          </div>
+          <button class="btn-primary" id="btn-join" onclick="joinRoom()">
+            <span>🎯 Join Room</span>
+          </button>
+        </div>
+
+        <p id="lobby-error" class="error-msg"></p>
+      </div>
+
+      <div class="controls-hint">
+        <span>WASD / Arrows — Move</span>
+        <span class="sep">·</span>
+        <span>Space — Dash</span>
+        <span class="sep">·</span>
+        <span>Touch others to pass the bomb</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WAITING ROOM ──────────────────────────────────────────────── -->
+  <div id="screen-waiting" class="screen">
+    <div class="lobby-bg">
+      <div class="scanlines"></div>
+    </div>
+    <div class="waiting-content">
+      <h2 class="room-title">ROOM <span id="display-room-code">------</span></h2>
+      <p class="room-subtitle">Share the code with friends</p>
+
+      <div id="player-list" class="player-list"></div>
+
+      <div class="waiting-actions">
+        <button class="btn-primary" id="btn-start" onclick="startGame()">
+          <span>🚀 Start Game</span>
+        </button>
+        <p class="waiting-hint" id="waiting-hint">Need at least 2 players</p>
+        <p class="error-msg waiting-msg" id="waiting-message"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── GAME SCREEN ───────────────────────────────────────────────── -->
+  <div id="screen-game" class="screen">
+    <div id="hud">
+      <div id="hud-left">
+        <div id="bomb-timer-wrap" class="bomb-timer-wrap">
+          <div class="bomb-icon-hud">💣</div>
+          <div id="bomb-timer-bar-bg">
+            <div id="bomb-timer-bar"></div>
+          </div>
+          <div id="bomb-timer-text">8.0s</div>
+        </div>
+      </div>
+      <div id="hud-right">
+        <div id="score-board"></div>
+      </div>
+    </div>
+
+    <div id="countdown-overlay" class="countdown-overlay hidden">
+      <div id="countdown-number"></div>
+    </div>
+
+    <div id="game-message" class="game-message hidden"></div>
+
+    <div id="game-canvas-wrap">
+      <canvas id="gameCanvas"></canvas>
+      <div id="screen-shake-overlay"></div>
+    </div>
+  </div>
+
+  <!-- ── GAME OVER SCREEN ──────────────────────────────────────────── -->
+  <div id="screen-gameover" class="screen">
+    <div class="lobby-bg">
+      <div class="scanlines"></div>
+    </div>
+    <div class="gameover-content">
+      <div id="winner-display"></div>
+      <div id="final-scores" class="final-scores"></div>
+      <div class="gameover-actions">
+        <button class="btn-primary" onclick="playAgain()"><span>🔁 Play Again</span></button>
+        <button class="btn-secondary" onclick="goToLobby()"><span>🏠 Main Menu</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.io CDN -->
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <!-- Phaser 3 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+
+  <script src="game.js"></script>
+</body>
+</html>

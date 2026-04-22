@@ -1,0 +1,11 @@
+{
+  "name": "time-bomb-arena",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node -e \"console.log('No build step required for Time Bomb Arena')\"",
+    "postinstall": "npm install --prefix server",
+    "start": "npm --prefix server start",
+    "dev": "npm --prefix server run dev"
+  }
+}
