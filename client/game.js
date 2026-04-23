@@ -85,6 +85,23 @@ const SPAWN_PREVIEW_POSITIONS = [
   { x: 450, y: 80  }, { x: 450, y: 520 },
   { x: 100, y: 100 }, { x: 800, y: 500 },
 ];
+const CHARACTER_OPTIONS = [
+  {
+    id: 'forest-ranger-1',
+    textureKey: 'character-forest-ranger-1',
+    avatarUrl: '/characters/Forest_Ranger_1/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
+  },
+  {
+    id: 'forest-ranger-2',
+    textureKey: 'character-forest-ranger-2',
+    avatarUrl: '/characters/Forest_Ranger_2/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
+  },
+  {
+    id: 'forest-ranger-3',
+    textureKey: 'character-forest-ranger-3',
+    avatarUrl: '/characters/Forest_Ranger_3/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
+  },
+];
 
 // ─── SCREEN HELPERS ──────────────────────────────────────────────────────────
 function showScreen(id) {
@@ -149,7 +166,9 @@ function renderWaitingRoom(players) {
     const div = document.createElement('div');
     div.className = 'player-entry';
     div.innerHTML = `
-      <div class="player-dot" style="color:${p.color};background:${p.color};"></div>
+      <div class="player-avatar-wrap">
+        <img class="player-avatar" src="${escapeAttribute(getPlayerAvatarUrl(p))}" alt="${escapeAttribute(p.name)}" />
+      </div>
       <span class="player-entry-name">${escapeHtml(p.name)}</span>
       ${p.id === currentHostId ? '<span class="player-entry-badge">HOST</span>' : ''}
     `;
@@ -207,6 +226,8 @@ function buildPreviewGameState(firstBombHolder = null) {
         hasBomb: player.id === firstBombHolder,
         dashActive: false,
         color: player.color,
+        characterId: player.characterId,
+        avatarUrl: player.avatarUrl,
       };
     }),
     bombTimer: BOMB_TIMER_MS,
@@ -216,6 +237,27 @@ function buildPreviewGameState(firstBombHolder = null) {
 
 function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escapeAttribute(s) {
+  return escapeHtml(String(s)).replace(/"/g, '&quot;');
+}
+
+function getCharacterOption(characterId) {
+  return CHARACTER_OPTIONS.find((option) => option.id === characterId) || CHARACTER_OPTIONS[0];
+}
+
+function getCharacterTextureKey(characterId) {
+  return getCharacterOption(characterId).textureKey;
+}
+
+function getPlayerAvatarUrl(player) {
+  if (player && player.avatarUrl) return player.avatarUrl;
+  return getCharacterOption(player?.characterId).avatarUrl;
+}
+
+function renderAvatarMarkup(player, className = 'score-avatar') {
+  return `<img class="${className}" src="${escapeAttribute(getPlayerAvatarUrl(player))}" alt="${escapeAttribute(player?.name || 'Player')}" />`;
 }
 
 // ─── HUD ─────────────────────────────────────────────────────────────────────
@@ -239,7 +281,7 @@ function updateHUD(state) {
       (p.hasBomb ? ' has-bomb' : '') +
       (!p.alive  ? ' eliminated' : '');
     div.innerHTML = `
-      <div class="score-dot" style="background:${p.color}"></div>
+      ${renderAvatarMarkup(p, 'score-avatar')}
       <span>${escapeHtml(p.name)}</span>
       <span style="color:var(--accent2);margin-left:4px">${localScores[p.id] || 0}</span>
       ${p.hasBomb ? ' 💣' : ''}
@@ -343,7 +385,13 @@ class GameScene extends Phaser.Scene {
     this.walls      = [];
   }
 
-  preload() {}
+  preload() {
+    for (const option of CHARACTER_OPTIONS) {
+      if (!this.textures.exists(option.textureKey)) {
+        this.load.image(option.textureKey, option.avatarUrl);
+      }
+    }
+  }
 
   create() {
     gameScene = this;
@@ -481,21 +529,24 @@ class GameScene extends Phaser.Scene {
     // Aura (visible when has bomb)
     const aura = this.add.graphics();
 
+    const frame = this.add.graphics();
+    frame.fillStyle(0x162033, 0.95);
+    frame.fillCircle(0, 0, PLAYER_RADIUS + 5);
+    frame.lineStyle(2, 0x6ea2ff, 0.45);
+    frame.strokeCircle(0, 0, PLAYER_RADIUS + 5);
+
     // Body
-    const body = this.add.graphics();
-    const hexColor = parseInt(p.color.replace('#',''), 16);
-    body.fillStyle(hexColor, 1);
-    body.fillCircle(0, 0, PLAYER_RADIUS);
-    body.lineStyle(2, 0xffffff, 0.3);
-    body.strokeCircle(0, 0, PLAYER_RADIUS);
+    const body = this.add.image(0, 2, getCharacterTextureKey(p.characterId));
+    body.setOrigin(0.5, 0.76);
+    body.setScale(0.058);
 
     // Visor
     const visor = this.add.graphics();
-    visor.fillStyle(0xffffff, 0.15);
-    visor.fillCircle(-4, -4, 7);
+    visor.fillStyle(0xffffff, 0.08);
+    visor.fillCircle(-3, -6, 12);
 
     // Name
-    const nameText = this.add.text(0, -PLAYER_RADIUS - 12, p.name, {
+    const nameText = this.add.text(0, -PLAYER_RADIUS - 18, p.name, {
       fontFamily: 'Rajdhani', fontSize: '13px', fontStyle: 'bold',
       color: '#ffffff',
       stroke: '#000000', strokeThickness: 3,
@@ -506,11 +557,11 @@ class GameScene extends Phaser.Scene {
       fontSize: '18px',
     }).setOrigin(0.5).setVisible(false);
 
-    container.add([shadow, aura, body, visor, nameText, bombText]);
+    container.add([shadow, aura, frame, body, visor, nameText, bombText]);
 
     this.players[p.id] = {
-      container, shadow, aura, body, visor, nameText, bombText,
-      color: hexColor, px: p.x, py: p.y,
+      container, shadow, aura, frame, body, visor, nameText, bombText,
+      color: p.color, px: p.x, py: p.y,
       alive: p.alive,
     };
   }
@@ -858,6 +909,8 @@ socket.on('gameState', (state) => {
     id: player.id,
     name: player.name,
     color: player.color,
+    characterId: player.characterId,
+    avatarUrl: player.avatarUrl,
   }));
   if (gameScene) gameScene.updateFromState(state);
 });
@@ -895,6 +948,7 @@ socket.on('gameOver', (data) => {
     winnerEl.innerHTML = `
       <span class="winner-crown">${isMe ? '🏆' : '🎖️'}</span>
       <h2>${isMe ? 'YOU WIN!' : 'WINNER'}</h2>
+      ${renderAvatarMarkup(data.winner, 'winner-avatar')}
       <div class="winner-name" style="color:${isMe ? '#ffcc00' : '#fff'}">${escapeHtml(data.winner.name)}</div>
     `;
   } else {
@@ -909,7 +963,7 @@ socket.on('gameOver', (data) => {
     row.className = 'final-score-row';
     row.innerHTML = `
       <div class="final-score-rank">${i+1}</div>
-      <div class="score-dot" style="background:${s.color};width:12px;height:12px;border-radius:50%;flex-shrink:0"></div>
+      ${renderAvatarMarkup(s, 'final-score-avatar')}
       <div class="final-score-name">${escapeHtml(s.name)}</div>
       <div class="final-score-wins">${s.score} wins</div>
     `;

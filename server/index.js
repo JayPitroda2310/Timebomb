@@ -13,6 +13,7 @@ const io = new Server(server, {
 
 // Serve client files
 app.use(express.static(path.join(__dirname, '../client')));
+app.use('/characters', express.static(path.join(__dirname, '../characters')));
 app.get('/health', (_req, res) => {
   res.json({ ok: true, rooms: rooms.size });
 });
@@ -63,6 +64,21 @@ const SPAWNS = [
   { x: 100, y: 100 }, { x: 800, y: 500 },
 ];
 
+const CHARACTER_OPTIONS = [
+  {
+    id: 'forest-ranger-1',
+    avatarUrl: '/characters/Forest_Ranger_1/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
+  },
+  {
+    id: 'forest-ranger-2',
+    avatarUrl: '/characters/Forest_Ranger_2/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
+  },
+  {
+    id: 'forest-ranger-3',
+    avatarUrl: '/characters/Forest_Ranger_3/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
+  },
+];
+
 // ─── ROOMS ───────────────────────────────────────────────────────────────────
 const rooms = new Map(); // roomId -> RoomState
 
@@ -88,6 +104,8 @@ function getPublicPlayers(room) {
     id: p.id,
     name: p.name,
     color: p.color,
+    characterId: p.characterId,
+    avatarUrl: p.avatarUrl,
   }));
 }
 
@@ -116,6 +134,7 @@ function assignNextHost(room) {
 
 function createPlayer(socketId, name, spawnIndex) {
   const spawn = SPAWNS[spawnIndex % SPAWNS.length];
+  const character = CHARACTER_OPTIONS[spawnIndex % CHARACTER_OPTIONS.length];
   return {
     id: socketId,
     name: name || `Player ${spawnIndex + 1}`,
@@ -135,6 +154,8 @@ function createPlayer(socketId, name, spawnIndex) {
     portalCooldown: 0,
     spawnIndex,
     color: ['#FF4444','#44AAFF','#44FF88','#FFBB44','#FF44FF','#44FFFF'][spawnIndex % 6],
+    characterId: character.id,
+    avatarUrl: character.avatarUrl,
   };
 }
 
@@ -306,6 +327,7 @@ function gameTick(room) {
       id: p.id, name: p.name, x: p.x, y: p.y,
       alive: p.alive, hasBomb: p.hasBomb,
       dashActive: p.dashActive, color: p.color,
+      characterId: p.characterId, avatarUrl: p.avatarUrl,
     })),
     bombTimer: room.bombTimer,
     bombHolder: room.bombHolder,
@@ -329,10 +351,17 @@ function endGame(room, winner) {
     name: p.name,
     score: room.scores[p.id] || 0,
     color: p.color,
+    characterId: p.characterId,
+    avatarUrl: p.avatarUrl,
   }));
 
   io.to(room.id).emit('gameOver', {
-    winner: winner ? { id: winner.id, name: winner.name } : null,
+    winner: winner ? {
+      id: winner.id,
+      name: winner.name,
+      characterId: winner.characterId,
+      avatarUrl: winner.avatarUrl,
+    } : null,
     scores: scoreList,
   });
 }
@@ -415,7 +444,13 @@ io.on('connection', (socket) => {
     socket.join(normalizedRoomId);
     currentRoom = normalizedRoomId;
 
-    const playerList = [...room.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color }));
+    const playerList = [...room.players.values()].map(p => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+      characterId: p.characterId,
+      avatarUrl: p.avatarUrl,
+    }));
 
     socket.emit('roomJoined', {
       roomId: currentRoom,

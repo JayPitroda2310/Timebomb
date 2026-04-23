@@ -255,11 +255,24 @@ html, body {
   from { opacity: 0; transform: translateX(-12px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-.player-dot {
-  width: 14px; height: 14px;
+.player-avatar-wrap {
+  width: 50px; height: 50px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 8px currentColor;
+  overflow: hidden;
+  background: radial-gradient(circle at top, rgba(110,162,255,0.28), rgba(14,18,29,0.95));
+  border: 1px solid rgba(110,162,255,0.35);
+  box-shadow: inset 0 0 18px rgba(255,255,255,0.08), 0 0 18px rgba(0,0,0,0.28);
+}
+.player-avatar,
+.score-avatar,
+.final-score-avatar,
+.winner-avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 28%;
 }
 .player-entry-name {
   font-weight: 700; font-size: 1.05rem;
@@ -353,7 +366,31 @@ html, body {
   opacity: 0.3;
   text-decoration: line-through;
 }
-.score-dot { width: 10px; height: 10px; border-radius: 50%; }
+.score-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.winner-avatar {
+  width: 92px;
+  height: 92px;
+  margin: 10px auto 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,204,0,0.45);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 24px rgba(255,204,0,0.18);
+}
+.final-score-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+}
 
 /* Canvas */
 #game-canvas-wrap {
