@@ -63,7 +63,7 @@ function connectSocket(serverUrl) {
   setConnectionStatus(`Connecting to ${resolvedUrl}...`);
 
   socket = io(resolvedUrl, {
-    transports: ['websocket', 'polling'],
+    transports: ['websocket'],
     autoConnect: true,
   });
 
