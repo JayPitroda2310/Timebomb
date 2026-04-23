@@ -70,6 +70,12 @@ let currentPhase = 'lobby';   // lobby | waiting | playing | gameover
 let gameScene    = null;       // reference to Phaser scene
 let mapData      = null;
 let localScores  = {};
+let latestRoomPlayers = [];
+const SPAWN_PREVIEW_POSITIONS = [
+  { x: 100, y: 300 }, { x: 800, y: 300 },
+  { x: 450, y: 80  }, { x: 450, y: 520 },
+  { x: 100, y: 100 }, { x: 800, y: 500 },
+];
 
 // ─── SCREEN HELPERS ──────────────────────────────────────────────────────────
 function showScreen(id) {
@@ -173,9 +179,30 @@ function applyRoomState(data) {
     if (roomCodeEl) roomCodeEl.textContent = data.roomId;
   }
   if (Array.isArray(data.players)) {
+    latestRoomPlayers = data.players.map((player) => ({ ...player }));
     renderWaitingRoom(data.players);
     updateWaitingControls(data.players);
   }
+}
+
+function buildPreviewGameState(firstBombHolder = null) {
+  return {
+    players: latestRoomPlayers.map((player, index) => {
+      const spawn = SPAWN_PREVIEW_POSITIONS[index % SPAWN_PREVIEW_POSITIONS.length];
+      return {
+        id: player.id,
+        name: player.name,
+        x: spawn.x,
+        y: spawn.y,
+        alive: true,
+        hasBomb: player.id === firstBombHolder,
+        dashActive: false,
+        color: player.color,
+      };
+    }),
+    bombTimer: 8000,
+    bombHolder: firstBombHolder,
+  };
 }
 
 function escapeHtml(s) {
@@ -707,6 +734,7 @@ socket.on('roomCreated', (data) => {
   myRoomId   = data.roomId;
   currentHostId = data.hostId || data.playerId;
   mapData    = data.mapData;
+  latestRoomPlayers = (data.players || []).map((player) => ({ ...player }));
   currentPhase = 'waiting';
   document.getElementById('display-room-code').textContent = data.roomId;
   renderWaitingRoom(data.players);
@@ -721,6 +749,7 @@ socket.on('roomJoined', (data) => {
   myRoomId   = data.roomId;
   currentHostId = data.hostId || null;
   mapData    = data.mapData;
+  latestRoomPlayers = (data.players || []).map((player) => ({ ...player }));
   currentPhase = 'waiting';
   document.getElementById('display-room-code').textContent = data.roomId;
   renderWaitingRoom(data.players);
@@ -737,6 +766,7 @@ socket.on('roomState', (data) => {
 socket.on('backToLobby', (data) => {
   currentPhase = 'waiting';
   currentHostId = data.hostId || currentHostId;
+  latestRoomPlayers = (data.players || []).map((player) => ({ ...player }));
   renderWaitingRoom(data.players);
   updateWaitingControls(data.players);
   setWaitingMessage('');
@@ -792,11 +822,22 @@ socket.on('gameStart', (data) => {
     // After restart, buildMap will be called in create()
   }
 
-  showGameMessage('GO!', 1200);
+  setTimeout(() => {
+    if (gameScene && latestRoomPlayers.length) {
+      gameScene.updateFromState(buildPreviewGameState(data.firstBombHolder));
+    }
+  }, 0);
+
+  showGameMessage('GO!  WASD / Arrows move, Space dashes', 1800);
 });
 
 socket.on('gameState', (state) => {
   if (currentPhase !== 'playing') return;
+  latestRoomPlayers = (state.players || []).map((player) => ({
+    id: player.id,
+    name: player.name,
+    color: player.color,
+  }));
   if (gameScene) gameScene.updateFromState(state);
 });
 
