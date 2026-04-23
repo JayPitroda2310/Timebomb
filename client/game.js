@@ -344,6 +344,10 @@ class GameScene extends Phaser.Scene {
 
     // Particle emitter (manual)
     this.particleGraphics = this.add.graphics();
+
+    if ((currentPhase === 'countdown' || currentPhase === 'playing') && latestRoomPlayers.length) {
+      this.updateFromState(buildPreviewGameState());
+    }
   }
 
   buildMap(data) {
