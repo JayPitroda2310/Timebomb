@@ -8,16 +8,25 @@
 // ─── SOCKET ──────────────────────────────────────────────────────────────────
 function resolveSocketServerUrl() {
   const params = new URLSearchParams(window.location.search);
-  const queryServer = params.get('server');
-  const storedServer = window.localStorage.getItem('timeBombServerUrl');
-  const configuredServer = window.TIME_BOMB_SERVER_URL;
+  const queryServer = normalizeServerUrl(params.get('server'));
+  const storedServer = normalizeServerUrl(window.localStorage.getItem('timeBombServerUrl'));
+  const configuredServer = normalizeServerUrl(window.TIME_BOMB_SERVER_URL);
 
   if (queryServer) {
     window.localStorage.setItem('timeBombServerUrl', queryServer);
     return queryServer;
   }
 
-  return configuredServer || storedServer || window.location.origin;
+  // Prefer the deployment-configured backend so old localStorage values
+  // do not silently point different players at different Socket.IO servers.
+  if (configuredServer) {
+    if (storedServer && storedServer !== configuredServer) {
+      window.localStorage.setItem('timeBombServerUrl', configuredServer);
+    }
+    return configuredServer;
+  }
+
+  return storedServer || window.location.origin;
 }
 
 let socket = null;

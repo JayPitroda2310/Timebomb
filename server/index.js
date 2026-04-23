@@ -401,7 +401,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinRoom', ({ roomId, name }) => {
-    const room = rooms.get(roomId.toUpperCase());
+    const normalizedRoomId = String(roomId || '').trim().toUpperCase();
+    const room = rooms.get(normalizedRoomId);
     if (!room) { socket.emit('roomError', { msg: 'Room not found' }); return; }
     if (room.phase !== 'lobby') { socket.emit('roomError', { msg: 'Game already in progress' }); return; }
     if (room.players.size >= MAX_PLAYERS) { socket.emit('roomError', { msg: 'Room is full' }); return; }
@@ -411,8 +412,8 @@ io.on('connection', (socket) => {
     room.players.set(socket.id, player);
     room.scores[socket.id] = 0;
 
-    socket.join(roomId.toUpperCase());
-    currentRoom = roomId.toUpperCase();
+    socket.join(normalizedRoomId);
+    currentRoom = normalizedRoomId;
 
     const playerList = [...room.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color }));
 
