@@ -25,7 +25,6 @@ const GRID_COLS = 9;
 const GRID_ROWS = 6;
 const CELL_W = MAP_W / GRID_COLS;
 const CELL_H = MAP_H / GRID_ROWS;
-const WALL_PADDING = 12;
 const PLAYER_RADIUS = 18;
 const PLAYER_SPEED = 220;
 const DASH_SPEED = 650;
@@ -37,15 +36,7 @@ const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 6;
 const PORTAL_RADIUS = 24;
 const PORTAL_COOLDOWN_MS = 400;
-const PORTAL_SPAWN_MIN_MS = 5000;
-const PORTAL_SPAWN_MAX_MS = 8000;
-const PORTAL_LIFETIME_MIN_MS = 3000;
-const PORTAL_LIFETIME_MAX_MS = 6000;
-const PORTAL_MAX_ACTIVE_MIN = 2;
-const PORTAL_MAX_ACTIVE_MAX = 3;
-const EVENT_INTERVAL_MS = 12000;
-const EVENT_DURATION_MS = 4500;
-const ROTATING_BAR_PUSH = 330;
+const PORTAL_SWAP_INTERVAL_MS = 10000;
 
 const CHARACTER_OPTIONS = [
   {
@@ -95,24 +86,11 @@ function createRoom(roomId) {
     roundWinner: null,
     scores: {},
     map: null,
-    events: {
-      nextAt: Date.now() + EVENT_INTERVAL_MS,
-      active: null,
-      triggeredAt: 0,
-    },
   };
 }
 
 function randomInt(max) {
   return Math.floor(Math.random() * max);
-}
-
-function randomRange(min, max) {
-  return min + Math.random() * (max - min);
-}
-
-function randomRangeInt(min, max) {
-  return Math.floor(randomRange(min, max + 1));
 }
 
 function choice(items) {
@@ -132,15 +110,6 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function cellKey(col, row) {
-  return `${col},${row}`;
-}
-
-function parseCellKey(key) {
-  const [col, row] = key.split(',').map(Number);
-  return { col, row };
-}
-
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -150,10 +119,6 @@ function toWorldPosition(cell) {
     x: cell.col * CELL_W + CELL_W / 2,
     y: cell.row * CELL_H + CELL_H / 2,
   };
-}
-
-function distanceCells(a, b) {
-  return Math.abs(a.col - b.col) + Math.abs(a.row - b.row);
 }
 
 function createPlayer(socketId, name, spawnIndex) {
@@ -216,217 +181,57 @@ function assignNextHost(room) {
   room.hostId = room.players.keys().next().value || null;
 }
 
-function carveLine(open, from, to) {
-  const current = { ...from };
-  open.add(cellKey(current.col, current.row));
-  while (current.col !== to.col) {
-    current.col += current.col < to.col ? 1 : -1;
-    open.add(cellKey(current.col, current.row));
-  }
-  while (current.row !== to.row) {
-    current.row += current.row < to.row ? 1 : -1;
-    open.add(cellKey(current.col, current.row));
-  }
-}
-
-function expandOpenCells(open, iterations) {
-  for (let i = 0; i < iterations; i++) {
-    const cells = shuffle([...open].map(parseCellKey));
-    const cell = cells[0];
-    if (!cell) break;
-    const neighbors = shuffle([
-      { col: cell.col + 1, row: cell.row },
-      { col: cell.col - 1, row: cell.row },
-      { col: cell.col, row: cell.row + 1 },
-      { col: cell.col, row: cell.row - 1 },
-    ]).filter((next) => next.col >= 0 && next.col < GRID_COLS && next.row >= 0 && next.row < GRID_ROWS);
-    if (neighbors[0]) {
-      open.add(cellKey(neighbors[0].col, neighbors[0].row));
-    }
-    if (neighbors[1] && Math.random() > 0.55) {
-      open.add(cellKey(neighbors[1].col, neighbors[1].row));
-    }
-  }
-}
-
-function getCellDegrees(open) {
-  const degrees = new Map();
-  for (const key of open) {
-    const cell = parseCellKey(key);
-    let degree = 0;
-    const neighbors = [
-      cellKey(cell.col + 1, cell.row),
-      cellKey(cell.col - 1, cell.row),
-      cellKey(cell.col, cell.row + 1),
-      cellKey(cell.col, cell.row - 1),
-    ];
-    for (const nextKey of neighbors) {
-      if (open.has(nextKey)) degree++;
-    }
-    degrees.set(key, degree);
-  }
-  return degrees;
-}
-
-function chooseFeatureCells(open, spawnCells, count, excluded = []) {
-  const blocked = new Set([
-    ...spawnCells.map((cell) => cellKey(cell.col, cell.row)),
-    ...excluded.map((cell) => cellKey(cell.col, cell.row)),
-  ]);
-  const picked = [];
-  for (const cell of shuffle([...open].map(parseCellKey))) {
-    const key = cellKey(cell.col, cell.row);
-    if (blocked.has(key)) continue;
-    if (picked.every((other) => distanceCells(other, cell) >= 2)) {
-      picked.push(cell);
-      blocked.add(key);
-    }
-    if (picked.length >= count) break;
-  }
-  return picked;
-}
-
-function createZoneFromCell(cell, inset = 18) {
-  return {
-    x: cell.col * CELL_W + inset,
-    y: cell.row * CELL_H + inset,
-    w: CELL_W - inset * 2,
-    h: CELL_H - inset * 2,
-  };
-}
-
-function createMovingWall(cell, axis, index) {
-  const center = toWorldPosition(cell);
-  const base = axis === 'x'
-    ? { x: center.x - 12, y: center.y - 40, w: 24, h: 80 }
-    : { x: center.x - 40, y: center.y - 12, w: 80, h: 24 };
-  return {
-    id: `mover-${index + 1}`,
-    axis,
-    baseX: base.x,
-    baseY: base.y,
-    w: base.w,
-    h: base.h,
-    range: axis === 'x' ? 30 : 26,
-    speed: 1.4 + index * 0.25,
-    phase: Math.random() * Math.PI * 2,
-  };
-}
-
-function createPillar(cell) {
-  const center = toWorldPosition(cell);
-  return {
-    shape: 'circle',
-    x: center.x,
-    y: center.y,
-    r: Math.min(CELL_W, CELL_H) * 0.22,
-  };
-}
-
-function createLaneBar(cell, orientation = 'horizontal', offset = 0) {
-  const center = toWorldPosition(cell);
-  if (orientation === 'horizontal') {
-    return {
-      shape: 'rect',
-      x: center.x - CELL_W * 0.38,
-      y: center.y - 12 + offset,
-      w: CELL_W * 0.76,
-      h: 24,
-    };
-  }
-  return {
-    shape: 'rect',
-    x: center.x - 12 + offset,
-    y: center.y - CELL_H * 0.38,
-    w: 24,
-    h: CELL_H * 0.76,
-  };
-}
-
-function buildWallsFromOpenCells(open) {
-  const walls = [];
+function getAllOpenCells() {
+  const cells = [];
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
-      if (open.has(cellKey(col, row))) continue;
-      const leftOpen = open.has(cellKey(col - 1, row));
-      const rightOpen = open.has(cellKey(col + 1, row));
-      const upOpen = open.has(cellKey(col, row - 1));
-      const downOpen = open.has(cellKey(col, row + 1));
-      const openCount = [leftOpen, rightOpen, upOpen, downOpen].filter(Boolean).length;
-
-      if (openCount >= 3 || (col + row) % 3 === 0) {
-        walls.push(createPillar({ col, row }));
-      } else if (leftOpen || rightOpen) {
-        walls.push(createLaneBar({ col, row }, 'vertical', (row % 2 === 0 ? -8 : 8)));
-      } else if (upOpen || downOpen) {
-        walls.push(createLaneBar({ col, row }, 'horizontal', (col % 2 === 0 ? -8 : 8)));
-      } else {
-        walls.push({
-          shape: 'rect',
-          x: col * CELL_W + WALL_PADDING + 10,
-          y: row * CELL_H + WALL_PADDING + 10,
-          w: CELL_W - (WALL_PADDING + 10) * 2,
-          h: CELL_H - (WALL_PADDING + 10) * 2,
-        });
-      }
+      cells.push({ col, row });
     }
   }
-  return walls;
+  return cells;
 }
 
-function generateThemeFeatures(theme, open, spawnCells) {
-  const openCells = [...open]
-    .map(parseCellKey)
-    .filter((cell) => !spawnCells.some((spawn) => spawn.col === cell.col && spawn.row === cell.row));
+function buildEvenObstacleLayout() {
+  const variants = shuffle([
+    [
+      { shape: 'rect', x: 405, y: 220, w: 90, h: 160 },
+      { shape: 'rect', x: 205, y: 92, w: 155, h: 54 },
+      { shape: 'rect', x: 580, y: 92, w: 155, h: 54 },
+      { shape: 'rect', x: 205, y: 454, w: 155, h: 54 },
+      { shape: 'rect', x: 580, y: 454, w: 155, h: 54 },
+    ],
+    [
+      { shape: 'rect', x: 370, y: 260, w: 160, h: 80 },
+      { shape: 'rect', x: 132, y: 206, w: 72, h: 165 },
+      { shape: 'rect', x: 696, y: 206, w: 72, h: 165 },
+      { shape: 'rect', x: 305, y: 82, w: 120, h: 58 },
+      { shape: 'rect', x: 475, y: 460, w: 120, h: 58 },
+    ],
+    [
+      { shape: 'circle', x: 450, y: 300, r: 62 },
+      { shape: 'rect', x: 190, y: 104, w: 175, h: 50 },
+      { shape: 'rect', x: 535, y: 104, w: 175, h: 50 },
+      { shape: 'rect', x: 190, y: 446, w: 175, h: 50 },
+      { shape: 'rect', x: 535, y: 446, w: 175, h: 50 },
+    ],
+  ]);
+  return variants[0];
+}
 
-  const movingWalls = [];
-  const rotatingBars = [];
-  const candidates = shuffle(openCells);
-
-  if (theme.id === 'industrial') {
-    const degrees = getCellDegrees(open);
-    const movers = candidates.filter((cell) => (degrees.get(cellKey(cell.col, cell.row)) || 0) >= 2).slice(0, 2);
-    movers.forEach((cell, index) => {
-      const horizontalNeighbors = open.has(cellKey(cell.col - 1, cell.row)) || open.has(cellKey(cell.col + 1, cell.row));
-      movingWalls.push(createMovingWall(cell, horizontalNeighbors ? 'x' : 'y', index));
-    });
-  }
-
-  const rotatingCells = chooseFeatureCells(open, spawnCells, 2);
-  rotatingCells.forEach((cell, index) => {
-    const center = toWorldPosition(cell);
-    rotatingBars.push({
-      id: `rotor-${index + 1}`,
-      x: center.x,
-      y: center.y,
-      length: 96 + index * 12,
-      thickness: 16,
-      angularSpeed: 1.1 + index * 0.35,
-      angle: Math.random() * Math.PI,
-      push: ROTATING_BAR_PUSH,
-    });
-  });
-
-  return { movingWalls, rotatingBars };
+function buildStrategicPortals() {
+  return [
+    { id: 'TELEPORT-A1', pairId: 'A', side: 0, kind: 'teleport', x: MAP_W / 2, y: 76 },
+    { id: 'TELEPORT-A2', pairId: 'A', side: 1, kind: 'teleport', x: MAP_W / 2, y: MAP_H - 76 },
+    { id: 'TELEPORT-B1', pairId: 'B', side: 0, kind: 'teleport', x: 86, y: MAP_H / 2 },
+    { id: 'TELEPORT-B2', pairId: 'B', side: 1, kind: 'teleport', x: MAP_W - 86, y: MAP_H / 2 },
+  ];
 }
 
 function generateMatchMap(playerCount) {
   const theme = choice(THEMES);
   const spawnCells = DEFAULT_SPAWN_CELLS.slice(0, playerCount);
-  const open = new Set(spawnCells.map((cell) => cellKey(cell.col, cell.row)));
-
-  const route = shuffle(spawnCells);
-  for (let i = 1; i < route.length; i++) {
-    carveLine(open, route[i - 1], route[i]);
-  }
-  carveLine(open, { col: 0, row: 2 }, { col: 8, row: 2 });
-  carveLine(open, { col: 2, row: 0 }, { col: 2, row: 5 });
-  carveLine(open, { col: 6, row: 0 }, { col: 6, row: 5 });
-  expandOpenCells(open, 16);
-
-  const walls = buildWallsFromOpenCells(open);
-  const themeFeatures = generateThemeFeatures(theme, open, spawnCells);
-  const now = Date.now();
+  const openCells = getAllOpenCells();
+  const walls = buildEvenObstacleLayout();
 
   return {
     width: MAP_W,
@@ -434,18 +239,15 @@ function generateMatchMap(playerCount) {
     grid: { cols: GRID_COLS, rows: GRID_ROWS, cellW: CELL_W, cellH: CELL_H },
     theme,
     walls,
-    openCells: [...open].map(parseCellKey),
-    portals: [],
+    openCells,
+    portals: buildStrategicPortals(),
     portalRadius: PORTAL_RADIUS,
     portalCooldownMs: PORTAL_COOLDOWN_MS,
-    portalSpawn: {
-      nextAt: now + randomRangeInt(PORTAL_SPAWN_MIN_MS, PORTAL_SPAWN_MAX_MS),
-      maxActive: randomRangeInt(PORTAL_MAX_ACTIVE_MIN, PORTAL_MAX_ACTIVE_MAX),
-      sequence: 0,
-    },
+    portalSwapStartedAt: Date.now(),
+    portalSwapIntervalMs: PORTAL_SWAP_INTERVAL_MS,
     spawns: spawnCells.map(toWorldPosition),
-    rotatingBars: themeFeatures.rotatingBars,
-    movingWalls: themeFeatures.movingWalls,
+    rotatingBars: [],
+    movingWalls: [],
   };
 }
 
@@ -474,10 +276,6 @@ function getAllWalls(map, now) {
   return [...(map.walls || []), ...getActiveMovingWalls(map, now)];
 }
 
-function scheduleNextPortal(map, now) {
-  map.portalSpawn.nextAt = now + randomRangeInt(PORTAL_SPAWN_MIN_MS, PORTAL_SPAWN_MAX_MS);
-}
-
 function circleOverlapsObstacle(x, y, radius, obstacle) {
   if (obstacle.shape === 'circle') {
     return Math.hypot(x - obstacle.x, y - obstacle.y) < radius + obstacle.r;
@@ -503,32 +301,6 @@ function circleOverlapsBar(x, y, radius, bar, now) {
   return pointToSegmentDistance(x, y, x1, y1, x2, y2).distance < radius + activeBar.thickness / 2;
 }
 
-function getRiskScore(map, point, activeWalls) {
-  const edgeDistance = Math.min(point.x, MAP_W - point.x, point.y, MAP_H - point.y);
-  let score = (Math.max(MAP_W, MAP_H) - edgeDistance) * 0.012;
-
-  for (const wall of activeWalls) {
-    const cx = wall.shape === 'circle' ? wall.x : wall.x + wall.w / 2;
-    const cy = wall.shape === 'circle' ? wall.y : wall.y + wall.h / 2;
-    const distance = Math.hypot(point.x - cx, point.y - cy);
-    if (distance < 180) score += (180 - distance) / 45;
-  }
-
-  for (const bar of map.rotatingBars || []) {
-    const distance = Math.hypot(point.x - bar.x, point.y - bar.y);
-    if (distance < 180) score += (180 - distance) / 38;
-  }
-
-  for (const wall of map.movingWalls || []) {
-    const cx = wall.baseX + wall.w / 2;
-    const cy = wall.baseY + wall.h / 2;
-    const distance = Math.hypot(point.x - cx, point.y - cy);
-    if (distance < 180) score += (180 - distance) / 42;
-  }
-
-  return score + Math.random() * 1.75;
-}
-
 function isValidTeleportPoint(map, x, y, players, now, radius = PLAYER_RADIUS) {
   if (x < radius || x > MAP_W - radius || y < radius || y > MAP_H - radius) return false;
   const activeWalls = getAllWalls(map, now);
@@ -538,78 +310,34 @@ function isValidTeleportPoint(map, x, y, players, now, radius = PLAYER_RADIUS) {
   return true;
 }
 
-function getRandomPointInCell(cell, margin = 24) {
-  return {
-    x: cell.col * CELL_W + randomRange(margin, CELL_W - margin),
-    y: cell.row * CELL_H + randomRange(margin, CELL_H - margin),
-  };
+function getActivePortalRole(map, portal, now) {
+  const startedAt = map.portalSwapStartedAt || now;
+  const interval = map.portalSwapIntervalMs || PORTAL_SWAP_INTERVAL_MS;
+  const phase = Math.floor((now - startedAt) / interval) % 2;
+  return portal.side === phase ? 'entry' : 'exit';
 }
 
-function choosePortalSpawnPosition(map, players, now) {
-  const activeWalls = getAllWalls(map, now);
-  const candidates = [];
-  for (const cell of shuffle(map.openCells || [])) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const point = getRandomPointInCell(cell, PORTAL_RADIUS + 6);
-      if (!isValidTeleportPoint(map, point.x, point.y, players, now, PORTAL_RADIUS)) continue;
-      candidates.push({
-        ...point,
-        score: getRiskScore(map, point, activeWalls),
-      });
-    }
-  }
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates[0] || null;
+function getLinkedPortal(map, portal) {
+  return (map.portals || []).find((candidate) => (
+    candidate.pairId === portal.pairId && candidate.id !== portal.id
+  )) || null;
 }
 
-function chooseTeleportDestination(map, player, players, now) {
+function getPortalState(map, now) {
+  return (map.portals || []).map((portal) => ({
+    ...portal,
+    role: getActivePortalRole(map, portal, now),
+    targetId: getLinkedPortal(map, portal)?.id || null,
+    swapIntervalMs: map.portalSwapIntervalMs || PORTAL_SWAP_INTERVAL_MS,
+  }));
+}
+
+function chooseTeleportDestination(map, player, portal, players, now) {
   const others = (players || []).filter((candidate) => candidate.id !== player.id);
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const cell = choice(map.openCells || []);
-    if (!cell) break;
-    const point = getRandomPointInCell(cell, PLAYER_RADIUS + 8);
-    if (isValidTeleportPoint(map, point.x, point.y, others, now, PLAYER_RADIUS)) return point;
-  }
-  return null;
-}
-
-function updateDynamicPortals(room, now) {
-  const map = room.map;
-  if (!map) return;
-  if (!map.portalSpawn) {
-    map.portalSpawn = {
-      nextAt: now + randomRangeInt(PORTAL_SPAWN_MIN_MS, PORTAL_SPAWN_MAX_MS),
-      maxActive: randomRangeInt(PORTAL_MAX_ACTIVE_MIN, PORTAL_MAX_ACTIVE_MAX),
-      sequence: 0,
-    };
-  }
-
-  const beforeIds = new Set((map.portals || []).map((portal) => portal.id));
-  map.portals = (map.portals || []).filter((portal) => now < portal.expiresAt);
-
-  if (now < map.portalSpawn.nextAt || map.portals.length >= map.portalSpawn.maxActive) return;
-
-  const alivePlayers = [...room.players.values()].filter((player) => player.alive);
-  const position = choosePortalSpawnPosition(map, alivePlayers, now);
-  scheduleNextPortal(map, now);
-  if (!position) return;
-
-  const lifetimeMs = randomRangeInt(PORTAL_LIFETIME_MIN_MS, PORTAL_LIFETIME_MAX_MS);
-  map.portalSpawn.sequence += 1;
-  const portal = {
-    id: `RIFT-${map.portalSpawn.sequence}`,
-    kind: 'random',
-    x: position.x,
-    y: position.y,
-    spawnedAt: now,
-    expiresAt: now + lifetimeMs,
-    lifetimeMs,
-  };
-  map.portals.push(portal);
-
-  if (!beforeIds.has(portal.id)) {
-    io.to(room.id).emit('portalSpawned', { portal });
-  }
+  const destination = getLinkedPortal(map, portal);
+  if (!destination) return null;
+  if (!isValidTeleportPoint(map, destination.x, destination.y, others, now, PLAYER_RADIUS)) return null;
+  return destination;
 }
 
 function circleRectOverlap(px, py, rect) {
@@ -698,33 +426,6 @@ function pointInRect(x, y, rect) {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
 
-function createEventZone(type) {
-  const col = 2 + randomInt(Math.max(1, GRID_COLS - 4));
-  const row = 1 + randomInt(Math.max(1, GRID_ROWS - 2));
-  return {
-    type,
-    ...createZoneFromCell({ col, row }, 14),
-  };
-}
-
-function triggerRoundEvent(room, now) {
-  const eventType = 'danger';
-  room.events.active = {
-    type: eventType,
-    startedAt: now,
-    endsAt: now + EVENT_DURATION_MS,
-    zone: createEventZone(eventType),
-  };
-  room.events.triggeredAt = now;
-  room.events.nextAt = now + EVENT_INTERVAL_MS + randomInt(2500);
-
-  io.to(room.id).emit('mapEvent', {
-    type: eventType,
-    zone: room.events.active.zone,
-    durationMs: EVENT_DURATION_MS,
-  });
-}
-
 function teleportPlayer(map, player, destination) {
   if (!destination) return;
 
@@ -743,6 +444,7 @@ function tryProcessPortal(map, player, players, now) {
   }
 
   const portal = (map.portals || []).find((candidate) => {
+    if (getActivePortalRole(map, candidate, now) !== 'entry') return false;
     return Math.hypot(player.x - candidate.x, player.y - candidate.y) < (map.portalRadius || PORTAL_RADIUS) + PLAYER_RADIUS;
   });
 
@@ -750,7 +452,7 @@ function tryProcessPortal(map, player, players, now) {
     return null;
   }
 
-  const destination = chooseTeleportDestination(map, player, players, now);
+  const destination = chooseTeleportDestination(map, player, portal, players, now);
   teleportPlayer(map, player, destination);
   return destination ? { teleported: true, portalId: portal.id, destination } : null;
 }
@@ -762,7 +464,7 @@ function getRoundMapData(map) {
     grid: map.grid,
     theme: map.theme,
     walls: map.walls,
-    portals: map.portals,
+    portals: getPortalState(map, Date.now()),
     portalRadius: map.portalRadius,
     portalCooldownMs: map.portalCooldownMs,
     spawns: map.spawns,
@@ -785,7 +487,7 @@ function eliminatePlayer(room, player, reason) {
     room.bombTimer = BOMB_TIMER_START;
   }
 
-  if (reason === 'lava' || reason === 'danger') {
+  if (reason === 'lava') {
     io.to(room.id).emit('hazardEliminated', {
       playerId: player.id,
       name: player.name,
@@ -816,17 +518,9 @@ function gameTick(room) {
   room.lastTick = now;
 
   const map = room.map || getFallbackMap();
-  updateDynamicPortals(room, now);
   const activeWalls = getAllWalls(map, now);
   const activeBars = getActiveRotatingBars(map, now);
   const alivePlayers = [...room.players.values()].filter((p) => p.alive);
-
-  if (!room.events.active && now >= room.events.nextAt) {
-    triggerRoundEvent(room, now);
-  }
-  if (room.events.active && now >= room.events.active.endsAt) {
-    room.events.active = null;
-  }
 
   for (const player of alivePlayers) {
     if (player.dashCooldown > 0) player.dashCooldown = Math.max(0, player.dashCooldown - dt);
@@ -911,11 +605,6 @@ function gameTick(room) {
       });
     }
 
-    if (room.events.active?.zone && pointInRect(player.x, player.y, room.events.active.zone)) {
-      if (room.events.active.type === 'danger') {
-        if (eliminatePlayer(room, player, 'danger')) return;
-      }
-    }
   }
 
   if (room.bombHolder) {
@@ -989,10 +678,10 @@ function gameTick(room) {
     })),
     bombTimer: room.bombTimer,
     bombHolder: room.bombHolder,
-    portals: map.portals,
+    portals: getPortalState(map, now),
     rotatingBars: activeBars,
     movingWalls: getActiveMovingWalls(map, now),
-    activeEvent: room.events.active,
+    activeEvent: null,
     theme: map.theme.id,
     ts: now,
   });
@@ -1033,11 +722,6 @@ function startGame(room) {
   room.lastTick = Date.now();
   clearCountdown(room);
   room.map = generateMatchMap(room.players.size);
-  room.events = {
-    nextAt: Date.now() + EVENT_INTERVAL_MS,
-    active: null,
-    triggeredAt: 0,
-  };
 
   let index = 0;
   for (const [, player] of room.players) {

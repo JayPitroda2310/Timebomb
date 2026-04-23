@@ -428,22 +428,6 @@ function playTeleport() {
   } catch(e){}
 }
 
-function playPortalSpawn() {
-  try {
-    const ctx = getAudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(140, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(520, ctx.currentTime + 0.24);
-    gain.gain.setValueAtTime(0.001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.04);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
-    osc.start(); osc.stop(ctx.currentTime + 0.28);
-  } catch(e){}
-}
-
 // ─── PHASER GAME ─────────────────────────────────────────────────────────────
 const PLAYER_RADIUS = 18;
 const MAP_W = 900, MAP_H = 600;
@@ -610,7 +594,6 @@ class GameScene extends Phaser.Scene {
     updateHUD(state);
     this.updateMovingWalls(state.movingWalls || []);
     this.updateRotatingBars(state.rotatingBars || []);
-    this.updateActiveEvent(state.activeEvent || null);
     this.updatePortals(state.portals || []);
 
     // Pulse vignette effect based on urgency
@@ -687,7 +670,7 @@ class GameScene extends Phaser.Scene {
           duration: 260,
           ease: 'Back.Out',
         });
-        sprite = { id: portal.id, container, gfx, color: 0x33e7ff, ...portal };
+        sprite = { id: portal.id, container, gfx, color: 0x33e7ff, role: portal.role || 'entry', ...portal };
         this.portals.push(sprite);
       }
       Object.assign(sprite, portal);
@@ -697,32 +680,7 @@ class GameScene extends Phaser.Scene {
     for (const portal of [...this.portals]) {
       if (activeIds.has(portal.id)) continue;
       this.portals = this.portals.filter((candidate) => candidate.id !== portal.id);
-      this.tweens.add({
-        targets: portal.container,
-        alpha: 0,
-        scaleX: 1.45,
-        scaleY: 1.45,
-        duration: 240,
-        ease: 'Sine.In',
-        onComplete: () => portal.container.destroy(),
-      });
-    }
-  }
-
-  updateActiveEvent(activeEvent) {
-    if (!activeEvent) {
-      if (this.activeEventOverlay) this.activeEventOverlay.clear();
-      return;
-    }
-    if (!this.activeEventOverlay) this.activeEventOverlay = this.add.graphics();
-    const overlay = this.activeEventOverlay;
-    overlay.clear();
-    if (activeEvent.zone) {
-      const color = activeEvent.type === 'danger' ? 0xff4f4f : 0x79d97c;
-      overlay.fillStyle(color, 0.14);
-      overlay.lineStyle(3, color, 0.7);
-      overlay.fillRect(activeEvent.zone.x, activeEvent.zone.y, activeEvent.zone.w, activeEvent.zone.h);
-      overlay.strokeRect(activeEvent.zone.x, activeEvent.zone.y, activeEvent.zone.w, activeEvent.zone.h);
+      portal.container.destroy();
     }
   }
 
@@ -916,20 +874,21 @@ class GameScene extends Phaser.Scene {
 
     // Animate portals
     for (const portal of this.portals) {
-      const lifeMs = Math.max(1, portal.lifetimeMs || 4500);
-      const age = Math.max(0, time + (Date.now() - performance.now()) - (portal.spawnedAt || Date.now()));
-      const remaining = portal.expiresAt ? Math.max(0, portal.expiresAt - Date.now()) / lifeMs : 1;
+      const isEntry = portal.role === 'entry';
+      const primary = isEntry ? 0x33e7ff : 0x7f8da5;
+      const secondary = isEntry ? 0xb8fff7 : 0xc9d3e5;
+      const inner = isEntry ? 0x6f5cff : 0x4f5b6d;
+      const alphaBase = isEntry ? 0.13 : 0.06;
       const pulse = 0.5 + Math.sin(time / 150 + portal.x * 0.01) * 0.5;
-      const radius = 19 + pulse * 5;
-      const alpha = Phaser.Math.Clamp(Math.min(1, remaining * 2.4), 0, 1);
+      const radius = (isEntry ? 19 : 16) + pulse * (isEntry ? 5 : 2);
       portal.gfx.clear();
-      portal.gfx.fillStyle(0x33e7ff, 0.13 * alpha);
+      portal.gfx.fillStyle(primary, alphaBase);
       portal.gfx.fillCircle(0, 0, radius + 8);
-      portal.gfx.lineStyle(4, 0xb8fff7, (0.35 + pulse * 0.5) * alpha);
+      portal.gfx.lineStyle(isEntry ? 4 : 3, secondary, (isEntry ? 0.35 : 0.18) + pulse * (isEntry ? 0.5 : 0.22));
       portal.gfx.strokeCircle(0, 0, radius);
-      portal.gfx.lineStyle(2, 0x6f5cff, (0.45 + pulse * 0.35) * alpha);
+      portal.gfx.lineStyle(2, inner, (isEntry ? 0.45 : 0.2) + pulse * (isEntry ? 0.35 : 0.14));
       portal.gfx.strokeCircle(0, 0, radius * 0.58);
-      portal.gfx.lineStyle(1, 0xffffff, 0.4 * alpha);
+      portal.gfx.lineStyle(1, 0xffffff, isEntry ? 0.4 : 0.18);
       portal.gfx.beginPath();
       for (let i = 0; i < 9; i++) {
         const angle = time / 360 + i * Math.PI * 2 / 9;
@@ -1171,20 +1130,6 @@ socket.on('hazardEliminated', (data) => {
 
 socket.on('portalUsed', (data) => {
   playTeleport();
-  if (data.playerId === myPlayerId) {
-    showGameMessage('Rift jump!', 1200);
-  }
-});
-
-socket.on('portalSpawned', () => {
-  playPortalSpawn();
-});
-
-socket.on('mapEvent', (data) => {
-  const labels = {
-    danger: 'Danger zone active!',
-  };
-  showGameMessage(labels[data.type] || 'Map event!', 1600);
 });
 
 socket.on('gameOver', (data) => {
