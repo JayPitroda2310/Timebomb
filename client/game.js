@@ -350,6 +350,20 @@ class GameScene extends Phaser.Scene {
     }
   }
 
+  prepareForRound(firstBombHolder = null) {
+    for (const id of Object.keys(this.players)) {
+      this.destroyPlayer(id);
+    }
+    this.players = {};
+    this.particles = [];
+    if (this.particleGraphics) {
+      this.particleGraphics.clear();
+    }
+    if (latestRoomPlayers.length) {
+      this.updateFromState(buildPreviewGameState(firstBombHolder));
+    }
+  }
+
   buildMap(data) {
     this.mapGfx = this.add.graphics();
     const g = this.mapGfx;
@@ -821,16 +835,9 @@ socket.on('gameStart', (data) => {
   // Update scores
   if (data.scores) localScores = data.scores;
 
-  if (gameScene && gameScene.scene.isActive()) {
-    gameScene.scene.restart();
-    // After restart, buildMap will be called in create()
+  if (gameScene) {
+    gameScene.prepareForRound(data.firstBombHolder);
   }
-
-  setTimeout(() => {
-    if (gameScene && latestRoomPlayers.length) {
-      gameScene.updateFromState(buildPreviewGameState(data.firstBombHolder));
-    }
-  }, 0);
 
   showGameMessage('GO!  WASD / Arrows move, Space dashes', 1800);
 });
