@@ -23,10 +23,6 @@ function resolveSocketServerUrl() {
 let socket = null;
 let currentServerUrl = '';
 
-function getServerInput() {
-  return document.getElementById('input-server');
-}
-
 function setConnectionStatus(message, isError = false) {
   const el = document.getElementById('connection-status');
   if (!el) return;
@@ -45,11 +41,6 @@ function normalizeServerUrl(rawUrl) {
   }
 }
 
-function updateServerInput(url) {
-  const input = getServerInput();
-  if (input) input.value = url;
-}
-
 function connectSocket(serverUrl) {
   const resolvedUrl = normalizeServerUrl(serverUrl) || window.location.origin;
 
@@ -60,7 +51,6 @@ function connectSocket(serverUrl) {
 
   currentServerUrl = resolvedUrl;
   window.localStorage.setItem('timeBombServerUrl', resolvedUrl);
-  updateServerInput(resolvedUrl);
   setConnectionStatus(`Connecting to ${resolvedUrl}...`);
 
   socket = io(resolvedUrl, {
@@ -112,7 +102,7 @@ function createRoom() {
   const name = document.getElementById('input-name').value.trim() || 'Bomber';
   ensureSocketConnection();
   if (!socket.connected) {
-    setError('Server is not connected yet. Check the Server URL and try again.');
+    setError('Server is not connected yet. Please try again in a moment.');
     return;
   }
   socket.emit('createRoom', { name });
@@ -124,7 +114,7 @@ function joinRoom() {
   if (!roomId) { setError('Enter a room code'); return; }
   ensureSocketConnection();
   if (!socket.connected) {
-    setError('Server is not connected yet. Check the Server URL and try again.');
+    setError('Server is not connected yet. Please try again in a moment.');
     return;
   }
   socket.emit('joinRoom', { roomId, name });
@@ -681,8 +671,7 @@ function initPhaser() {
 
 // ─── SOCKET EVENTS ───────────────────────────────────────────────────────────
 function ensureSocketConnection() {
-  const inputUrl = normalizeServerUrl(getServerInput()?.value);
-  const targetUrl = inputUrl || currentServerUrl || normalizeServerUrl(resolveSocketServerUrl()) || window.location.origin;
+  const targetUrl = currentServerUrl || normalizeServerUrl(resolveSocketServerUrl()) || window.location.origin;
   const shouldReconnect = !socket || currentServerUrl !== targetUrl;
 
   if (shouldReconnect) {
@@ -707,9 +696,9 @@ socket.on('connect', () => {
 socket.on('connect_error', () => {
   setConnectionStatus(`Could not connect to ${currentServerUrl}`, true);
   if (currentPhase === 'waiting') {
-    setWaitingMessage('Cannot reach the game server. Check the Server URL.');
+    setWaitingMessage('Cannot reach the game server right now.');
   } else {
-    setError('Cannot reach the game server. Check the Server URL.');
+    setError('Cannot reach the game server right now.');
   }
 });
 
@@ -879,14 +868,13 @@ socket.on('disconnect', () => {
   if (currentPhase === 'playing') {
     showGameMessage('Disconnected from server', 3000);
   } else {
-    setError('Disconnected from server. Check the Server URL and reconnect.');
+    setError('Disconnected from server. Please refresh and try again.');
   }
 });
 }
 
 // ─── KICK OFF ─────────────────────────────────────────────────────────────────
-updateServerInput(normalizeServerUrl(resolveSocketServerUrl()) || window.location.origin);
-connectSocket(getServerInput()?.value || resolveSocketServerUrl());
+connectSocket(resolveSocketServerUrl());
 showScreen('screen-lobby');
 
 // Prevent space bar from scrolling page
