@@ -298,7 +298,13 @@ html, body {
 }
 
 /* ─── GAME SCREEN ────────────────────────────────────────────────────────── */
-#screen-game { background: #060810; align-items: flex-start; flex-direction: column; }
+#screen-game {
+  background: #060810;
+  align-items: flex-start;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
 
 #hud {
   width: 100%;
@@ -394,11 +400,20 @@ html, body {
 
 /* Canvas */
 #game-canvas-wrap {
-  flex: 1; width: 100%;
+  flex: 1 1 auto; width: 100%;
+  min-height: 0;
+  height: calc(100dvh - 58px);
+  padding: 8px;
   display: flex; align-items: center; justify-content: center;
-  position: relative; overflow: hidden;
+  position: relative; overflow: visible;
 }
-#gameCanvas { display: block; }
+#gameCanvas {
+  display: block;
+  width: min(100%, calc((100dvh - 74px) * 1.5)) !important;
+  height: auto !important;
+  max-height: calc(100dvh - 74px) !important;
+  aspect-ratio: 3 / 2;
+}
 #screen-shake-overlay {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 5;

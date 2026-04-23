@@ -413,6 +413,37 @@ function playBombTransfer() {
   } catch(e){}
 }
 
+function playTeleport() {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.value = 260;
+    osc.frequency.exponentialRampToValueAtTime(820, ctx.currentTime + 0.16);
+    gain.gain.setValueAtTime(0.09, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.start(); osc.stop(ctx.currentTime + 0.18);
+  } catch(e){}
+}
+
+function playPortalSpawn() {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(520, ctx.currentTime + 0.24);
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+    osc.start(); osc.stop(ctx.currentTime + 0.28);
+  } catch(e){}
+}
+
 // ─── PHASER GAME ─────────────────────────────────────────────────────────────
 const PLAYER_RADIUS = 18;
 const MAP_W = 900, MAP_H = 600;
@@ -429,7 +460,8 @@ class GameScene extends Phaser.Scene {
     this.portals    = [];
     this.walls      = [];
     this.movingWallSprites = {};
-    this.zoneOverlays = [];
+    this.rotatingBarSprites = {};
+    this.activeEventOverlay = null;
     this.themeId = 'forest';
   }
 
@@ -474,16 +506,21 @@ class GameScene extends Phaser.Scene {
     this.themeId = data?.theme?.id || 'forest';
     if (this.mapGfx) this.mapGfx.destroy();
     this.portals.forEach((portal) => {
-      portal.gfx.destroy();
-      portal.label.destroy();
+      portal.container.destroy();
     });
     Object.values(this.movingWallSprites).forEach((wall) => {
       wall.gfx.destroy();
     });
-    this.zoneOverlays.forEach((zone) => zone.destroy());
+    Object.values(this.rotatingBarSprites).forEach((bar) => {
+      bar.gfx.destroy();
+    });
+    if (this.activeEventOverlay) {
+      this.activeEventOverlay.destroy();
+      this.activeEventOverlay = null;
+    }
     this.portals = [];
     this.movingWallSprites = {};
-    this.zoneOverlays = [];
+    this.rotatingBarSprites = {};
 
     this.mapGfx = this.add.graphics();
     const g = this.mapGfx;
@@ -501,57 +538,37 @@ class GameScene extends Phaser.Scene {
 
     // Walls
     for (const wall of data.walls) {
-      // Shadow
-      g.fillStyle(0x000000, 0.5);
-      g.fillRect(wall.x+4, wall.y+4, wall.w, wall.h);
-      // Body
-      g.fillStyle(palette.wall, 1);
-      g.fillRect(wall.x, wall.y, wall.w, wall.h);
-      // Edge highlight
-      g.lineStyle(1, palette.wallEdge, 1);
-      g.strokeRect(wall.x, wall.y, wall.w, wall.h);
-      // Top edge shine
-      g.lineStyle(2, palette.wallTop, 0.5);
-      g.beginPath(); g.moveTo(wall.x, wall.y); g.lineTo(wall.x+wall.w, wall.y); g.strokePath();
+      if (wall.shape === 'circle') {
+        g.fillStyle(0x000000, 0.45);
+        g.fillCircle(wall.x + 3, wall.y + 3, wall.r);
+        g.fillStyle(palette.wall, 1);
+        g.fillCircle(wall.x, wall.y, wall.r);
+        g.lineStyle(2, palette.wallEdge, 1);
+        g.strokeCircle(wall.x, wall.y, wall.r);
+      } else {
+        g.fillStyle(0x000000, 0.5);
+        g.fillRect(wall.x+4, wall.y+4, wall.w, wall.h);
+        g.fillStyle(palette.wall, 1);
+        g.fillRect(wall.x, wall.y, wall.w, wall.h);
+        g.lineStyle(1, palette.wallEdge, 1);
+        g.strokeRect(wall.x, wall.y, wall.w, wall.h);
+        g.lineStyle(2, palette.wallTop, 0.5);
+        g.beginPath(); g.moveTo(wall.x, wall.y); g.lineTo(wall.x+wall.w, wall.y); g.strokePath();
+      }
     }
 
     // Border
     g.lineStyle(3, palette.border, 1);
     g.strokeRect(1, 1, MAP_W-2, MAP_H-2);
 
-    for (const zone of data.zones || []) {
-      const zoneGfx = this.add.graphics();
-      if (zone.type === 'slow') {
-        zoneGfx.fillStyle(0x3c8d44, 0.22);
-        zoneGfx.lineStyle(2, 0x6fcb78, 0.6);
-      } else if (zone.type === 'lava') {
-        zoneGfx.fillStyle(0xb3321d, 0.24);
-        zoneGfx.lineStyle(2, 0xff7b32, 0.7);
-      }
-      zoneGfx.fillRect(zone.x, zone.y, zone.w, zone.h);
-      zoneGfx.strokeRect(zone.x, zone.y, zone.w, zone.h);
-      this.zoneOverlays.push(zoneGfx);
-    }
-
-    // Portals
-    for (const portal of data.portals) {
-      const portalColors = { A: 0x00aaff, B: 0xaa66ff, C: 0x33ddaa };
-      const col = portalColors[portal.id] || 0x00aaff;
-      const portalGfx = this.add.graphics();
-      portalGfx.fillStyle(col, 0.2);
-      portalGfx.fillCircle(portal.x, portal.y, data.portalRadius || 20);
-      portalGfx.lineStyle(2, col, 1);
-      portalGfx.strokeCircle(portal.x, portal.y, data.portalRadius || 20);
-      // Label
-      const label = this.add.text(portal.x, portal.y, `${portal.id}->${portal.pair}`, {
-        fontFamily: 'Rajdhani', fontSize: '11px', color: '#ffffffaa',
-      }).setOrigin(0.5);
-      this.portals.push({ gfx: portalGfx, label, ...portal, color: col });
-    }
-
     for (const wall of data.movingWalls || []) {
       const gfx = this.add.graphics();
       this.movingWallSprites[wall.id] = { gfx };
+    }
+
+    for (const bar of data.rotatingBars || []) {
+      const gfx = this.add.graphics();
+      this.rotatingBarSprites[bar.id] = { gfx };
     }
 
     this.walls = data.walls;
@@ -592,6 +609,9 @@ class GameScene extends Phaser.Scene {
     // Update HUD
     updateHUD(state);
     this.updateMovingWalls(state.movingWalls || []);
+    this.updateRotatingBars(state.rotatingBars || []);
+    this.updateActiveEvent(state.activeEvent || null);
+    this.updatePortals(state.portals || []);
 
     // Pulse vignette effect based on urgency
     if (state.bombHolder === myPlayerId) {
@@ -621,6 +641,88 @@ class GameScene extends Phaser.Scene {
       if (!activeIds.has(id)) {
         sprite.gfx.clear();
       }
+    }
+  }
+
+  updateRotatingBars(rotatingBars) {
+    const activeIds = new Set(rotatingBars.map((bar) => bar.id));
+    for (const bar of rotatingBars) {
+      if (!this.rotatingBarSprites[bar.id]) {
+        this.rotatingBarSprites[bar.id] = { gfx: this.add.graphics() };
+      }
+      const gfx = this.rotatingBarSprites[bar.id].gfx;
+      const half = bar.length / 2;
+      const x1 = bar.x + Math.cos(bar.angle) * half;
+      const y1 = bar.y + Math.sin(bar.angle) * half;
+      const x2 = bar.x - Math.cos(bar.angle) * half;
+      const y2 = bar.y - Math.sin(bar.angle) * half;
+      gfx.clear();
+      gfx.lineStyle(bar.thickness, 0xffd166, 0.9);
+      gfx.beginPath();
+      gfx.moveTo(x1, y1);
+      gfx.lineTo(x2, y2);
+      gfx.strokePath();
+      gfx.fillStyle(0xff8c42, 0.95);
+      gfx.fillCircle(bar.x, bar.y, bar.thickness * 0.55);
+    }
+
+    for (const [id, sprite] of Object.entries(this.rotatingBarSprites)) {
+      if (!activeIds.has(id)) sprite.gfx.clear();
+    }
+  }
+
+  updatePortals(portals) {
+    const activeIds = new Set(portals.map((portal) => portal.id));
+    for (const portal of portals) {
+      let sprite = this.portals.find((candidate) => candidate.id === portal.id);
+      if (!sprite) {
+        const container = this.add.container(portal.x, portal.y);
+        const gfx = this.add.graphics();
+        container.add(gfx);
+        container.setScale(0.18);
+        this.tweens.add({
+          targets: container,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 260,
+          ease: 'Back.Out',
+        });
+        sprite = { id: portal.id, container, gfx, color: 0x33e7ff, ...portal };
+        this.portals.push(sprite);
+      }
+      Object.assign(sprite, portal);
+      sprite.container.setPosition(portal.x, portal.y);
+    }
+
+    for (const portal of [...this.portals]) {
+      if (activeIds.has(portal.id)) continue;
+      this.portals = this.portals.filter((candidate) => candidate.id !== portal.id);
+      this.tweens.add({
+        targets: portal.container,
+        alpha: 0,
+        scaleX: 1.45,
+        scaleY: 1.45,
+        duration: 240,
+        ease: 'Sine.In',
+        onComplete: () => portal.container.destroy(),
+      });
+    }
+  }
+
+  updateActiveEvent(activeEvent) {
+    if (!activeEvent) {
+      if (this.activeEventOverlay) this.activeEventOverlay.clear();
+      return;
+    }
+    if (!this.activeEventOverlay) this.activeEventOverlay = this.add.graphics();
+    const overlay = this.activeEventOverlay;
+    overlay.clear();
+    if (activeEvent.zone) {
+      const color = activeEvent.type === 'danger' ? 0xff4f4f : 0x79d97c;
+      overlay.fillStyle(color, 0.14);
+      overlay.lineStyle(3, color, 0.7);
+      overlay.fillRect(activeEvent.zone.x, activeEvent.zone.y, activeEvent.zone.w, activeEvent.zone.h);
+      overlay.strokeRect(activeEvent.zone.x, activeEvent.zone.y, activeEvent.zone.w, activeEvent.zone.h);
     }
   }
 
@@ -682,6 +784,7 @@ class GameScene extends Phaser.Scene {
     obj.container.setPosition(obj.px, obj.py);
 
     const hasBomb = p.hasBomb;
+    const stunned = !!p.statusEffects?.stunned;
     obj.alive = p.alive;
 
     if (!p.alive) {
@@ -690,7 +793,7 @@ class GameScene extends Phaser.Scene {
       obj.bombText.setVisible(false);
       return;
     }
-    obj.container.setAlpha(1);
+    obj.container.setAlpha(stunned ? 0.82 : 1);
 
     // Dash effect
     if (p.dashActive) {
@@ -699,6 +802,12 @@ class GameScene extends Phaser.Scene {
     } else {
       obj.body.setAlpha(1);
     }
+
+    obj.frame.clear();
+    obj.frame.fillStyle(stunned ? 0x284463 : 0x162033, 0.95);
+    obj.frame.fillCircle(0, 0, PLAYER_RADIUS + 5);
+    obj.frame.lineStyle(stunned ? 3 : 2, stunned ? 0x8ce8ff : 0x6ea2ff, stunned ? 0.9 : 0.45);
+    obj.frame.strokeCircle(0, 0, PLAYER_RADIUS + 5);
 
     // Bomb visuals
     if (hasBomb) {
@@ -758,7 +867,7 @@ class GameScene extends Phaser.Scene {
       });
     }
 
-    // Shockwave rings
+    // Explosion rings
     for (let r = 0; r < 3; r++) {
       const ring = this.add.graphics();
       ring.lineStyle(3, 0xff6600, 0.8);
@@ -807,12 +916,29 @@ class GameScene extends Phaser.Scene {
 
     // Animate portals
     for (const portal of this.portals) {
-      const t = Math.sin(time / 500);
+      const lifeMs = Math.max(1, portal.lifetimeMs || 4500);
+      const age = Math.max(0, time + (Date.now() - performance.now()) - (portal.spawnedAt || Date.now()));
+      const remaining = portal.expiresAt ? Math.max(0, portal.expiresAt - Date.now()) / lifeMs : 1;
+      const pulse = 0.5 + Math.sin(time / 150 + portal.x * 0.01) * 0.5;
+      const radius = 19 + pulse * 5;
+      const alpha = Phaser.Math.Clamp(Math.min(1, remaining * 2.4), 0, 1);
       portal.gfx.clear();
-      portal.gfx.fillStyle(portal.color, 0.1 + t * 0.1);
-      portal.gfx.fillCircle(portal.x, portal.y, 20 + t * 3);
-      portal.gfx.lineStyle(2, portal.color, 0.6 + t * 0.4);
-      portal.gfx.strokeCircle(portal.x, portal.y, 20 + t * 3);
+      portal.gfx.fillStyle(0x33e7ff, 0.13 * alpha);
+      portal.gfx.fillCircle(0, 0, radius + 8);
+      portal.gfx.lineStyle(4, 0xb8fff7, (0.35 + pulse * 0.5) * alpha);
+      portal.gfx.strokeCircle(0, 0, radius);
+      portal.gfx.lineStyle(2, 0x6f5cff, (0.45 + pulse * 0.35) * alpha);
+      portal.gfx.strokeCircle(0, 0, radius * 0.58);
+      portal.gfx.lineStyle(1, 0xffffff, 0.4 * alpha);
+      portal.gfx.beginPath();
+      for (let i = 0; i < 9; i++) {
+        const angle = time / 360 + i * Math.PI * 2 / 9;
+        const inner = radius * 0.32;
+        const outer = radius * (0.78 + pulse * 0.14);
+        portal.gfx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+        portal.gfx.lineTo(Math.cos(angle + 0.45) * outer, Math.sin(angle + 0.45) * outer);
+      }
+      portal.gfx.strokePath();
     }
   }
 }
@@ -858,15 +984,10 @@ function initPhaser() {
 
   const canvas = document.getElementById('gameCanvas');
 
-  // Determine canvas size to fit screen
-  const hudH   = 58;
-  const scrnW  = window.innerWidth;
-  const scrnH  = window.innerHeight - hudH;
-  const scale  = Math.min(scrnW / MAP_W, scrnH / MAP_H, 1);
-
   phaserGame = new Phaser.Game({
     type: Phaser.CANVAS,
     canvas: canvas,
+    parent: 'game-canvas-wrap',
     width:  MAP_W,
     height: MAP_H,
     backgroundColor: '#080b12',
@@ -1046,6 +1167,24 @@ socket.on('hazardEliminated', (data) => {
     ? `You were consumed by ${data.hazard}!`
     : `${data.name} fell to ${data.hazard}!`;
   showGameMessage(msg, 2200);
+});
+
+socket.on('portalUsed', (data) => {
+  playTeleport();
+  if (data.playerId === myPlayerId) {
+    showGameMessage('Rift jump!', 1200);
+  }
+});
+
+socket.on('portalSpawned', () => {
+  playPortalSpawn();
+});
+
+socket.on('mapEvent', (data) => {
+  const labels = {
+    danger: 'Danger zone active!',
+  };
+  showGameMessage(labels[data.type] || 'Map event!', 1600);
 });
 
 socket.on('gameOver', (data) => {
