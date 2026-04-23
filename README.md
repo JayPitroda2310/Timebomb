@@ -128,6 +128,7 @@ Health check endpoint:
 Vercel can host the static frontend in `client/`, but the current `server/index.js` is a long-running Socket.IO server and is not a good fit for Vercel's serverless model.
 
 - Frontend: deploy this repo to Vercel with `vercel.json` pointing `outputDirectory` to `client`
+- Build step: `npm run build` now copies `client/` into `public/` so deployments still work if the Vercel project settings are set to `public`
 - Backend: deploy `server/` on a Node host such as Render, Railway, or Heroku-style hosting
 - Connect frontend to backend by opening the Vercel URL with `?server=https://your-backend-url`
 
