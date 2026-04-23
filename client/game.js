@@ -6,7 +6,22 @@
 'use strict';
 
 // ─── SOCKET ──────────────────────────────────────────────────────────────────
-const socket = io();
+function resolveSocketServerUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const queryServer = params.get('server');
+  const storedServer = window.localStorage.getItem('timeBombServerUrl');
+
+  if (queryServer) {
+    window.localStorage.setItem('timeBombServerUrl', queryServer);
+    return queryServer;
+  }
+
+  return storedServer || window.location.origin;
+}
+
+const socket = io(resolveSocketServerUrl(), {
+  transports: ['websocket', 'polling'],
+});
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let myPlayerId   = null;

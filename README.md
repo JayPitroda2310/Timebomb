@@ -123,6 +123,20 @@ Health check endpoint:
 
 - `GET /health`
 
+### Vercel
+
+Vercel can host the static frontend in `client/`, but the current `server/index.js` is a long-running Socket.IO server and is not a good fit for Vercel's serverless model.
+
+- Frontend: deploy this repo to Vercel with `vercel.json` pointing `outputDirectory` to `client`
+- Backend: deploy `server/` on a Node host such as Render, Railway, or Heroku-style hosting
+- Connect frontend to backend by opening the Vercel URL with `?server=https://your-backend-url`
+
+Example:
+
+```text
+https://your-vercel-app.vercel.app/?server=https://your-backend.onrender.com
+```
+
 ---
 
 ## 🔊 Audio
