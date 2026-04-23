@@ -30,6 +30,12 @@
           <input id="input-name" type="text" maxlength="16" placeholder="Enter name..." autocomplete="off" />
         </div>
 
+        <div class="input-row">
+          <label>Server URL</label>
+          <input id="input-server" type="url" placeholder="https://your-backend.onrender.com" autocomplete="off" />
+        </div>
+        <p id="connection-status" class="waiting-hint">Connecting to server...</p>
+
         <div class="lobby-tabs">
           <button class="tab-btn active" id="tab-create" onclick="showTab('create')">Create Room</button>
           <button class="tab-btn" id="tab-join" onclick="showTab('join')">Join Room</button>

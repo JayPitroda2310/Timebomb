@@ -10,18 +10,67 @@ function resolveSocketServerUrl() {
   const params = new URLSearchParams(window.location.search);
   const queryServer = params.get('server');
   const storedServer = window.localStorage.getItem('timeBombServerUrl');
+  const configuredServer = window.TIME_BOMB_SERVER_URL;
 
   if (queryServer) {
     window.localStorage.setItem('timeBombServerUrl', queryServer);
     return queryServer;
   }
 
-  return storedServer || window.location.origin;
+  return configuredServer || storedServer || window.location.origin;
 }
 
-const socket = io(resolveSocketServerUrl(), {
-  transports: ['websocket', 'polling'],
-});
+let socket = null;
+let currentServerUrl = '';
+
+function getServerInput() {
+  return document.getElementById('input-server');
+}
+
+function setConnectionStatus(message, isError = false) {
+  const el = document.getElementById('connection-status');
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? '#ff7a7a' : '';
+}
+
+function normalizeServerUrl(rawUrl) {
+  const value = String(rawUrl || '').trim();
+  if (!value) return '';
+
+  try {
+    return new URL(value).toString().replace(/\/$/, '');
+  } catch (_error) {
+    return '';
+  }
+}
+
+function updateServerInput(url) {
+  const input = getServerInput();
+  if (input) input.value = url;
+}
+
+function connectSocket(serverUrl) {
+  const resolvedUrl = normalizeServerUrl(serverUrl) || window.location.origin;
+
+  if (socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+  }
+
+  currentServerUrl = resolvedUrl;
+  window.localStorage.setItem('timeBombServerUrl', resolvedUrl);
+  updateServerInput(resolvedUrl);
+  setConnectionStatus(`Connecting to ${resolvedUrl}...`);
+
+  socket = io(resolvedUrl, {
+    transports: ['websocket', 'polling'],
+    autoConnect: true,
+  });
+
+  registerSocketEvents();
+  return socket;
+}
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let myPlayerId   = null;
@@ -61,6 +110,11 @@ function setWaitingMessage(msg) {
 // ─── LOBBY ACTIONS ───────────────────────────────────────────────────────────
 function createRoom() {
   const name = document.getElementById('input-name').value.trim() || 'Bomber';
+  ensureSocketConnection();
+  if (!socket.connected) {
+    setError('Server is not connected yet. Check the Server URL and try again.');
+    return;
+  }
   socket.emit('createRoom', { name });
 }
 
@@ -68,6 +122,11 @@ function joinRoom() {
   const name   = document.getElementById('input-name').value.trim() || 'Bomber';
   const roomId = document.getElementById('input-room').value.trim().toUpperCase();
   if (!roomId) { setError('Enter a room code'); return; }
+  ensureSocketConnection();
+  if (!socket.connected) {
+    setError('Server is not connected yet. Check the Server URL and try again.');
+    return;
+  }
   socket.emit('joinRoom', { roomId, name });
 }
 
@@ -621,8 +680,37 @@ function initPhaser() {
 }
 
 // ─── SOCKET EVENTS ───────────────────────────────────────────────────────────
+function ensureSocketConnection() {
+  const inputUrl = normalizeServerUrl(getServerInput()?.value);
+  const targetUrl = inputUrl || currentServerUrl || normalizeServerUrl(resolveSocketServerUrl()) || window.location.origin;
+  const shouldReconnect = !socket || currentServerUrl !== targetUrl;
+
+  if (shouldReconnect) {
+    connectSocket(targetUrl);
+    return;
+  }
+
+  if (!socket.connected) {
+    socket.connect();
+    setConnectionStatus(`Connecting to ${currentServerUrl}...`);
+  }
+}
+
+function registerSocketEvents() {
 socket.on('connect', () => {
   console.log('Connected:', socket.id);
+  setConnectionStatus(`Connected to ${currentServerUrl}`);
+  setError('');
+  setWaitingMessage('');
+});
+
+socket.on('connect_error', () => {
+  setConnectionStatus(`Could not connect to ${currentServerUrl}`, true);
+  if (currentPhase === 'waiting') {
+    setWaitingMessage('Cannot reach the game server. Check the Server URL.');
+  } else {
+    setError('Cannot reach the game server. Check the Server URL.');
+  }
 });
 
 socket.on('roomCreated', (data) => {
@@ -787,12 +875,18 @@ socket.on('playerLeft', (data) => {
 });
 
 socket.on('disconnect', () => {
+  setConnectionStatus(`Disconnected from ${currentServerUrl}`, true);
   if (currentPhase === 'playing') {
     showGameMessage('Disconnected from server', 3000);
+  } else {
+    setError('Disconnected from server. Check the Server URL and reconnect.');
   }
 });
+}
 
 // ─── KICK OFF ─────────────────────────────────────────────────────────────────
+updateServerInput(normalizeServerUrl(resolveSocketServerUrl()) || window.location.origin);
+connectSocket(getServerInput()?.value || resolveSocketServerUrl());
 showScreen('screen-lobby');
 
 // Prevent space bar from scrolling page
