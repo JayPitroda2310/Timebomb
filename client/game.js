@@ -214,9 +214,12 @@ function applyRoomState(data) {
 }
 
 function buildPreviewGameState(firstBombHolder = null) {
+  const previewSpawns = Array.isArray(mapData?.spawns) && mapData.spawns.length
+    ? mapData.spawns
+    : SPAWN_PREVIEW_POSITIONS;
   return {
     players: latestRoomPlayers.map((player, index) => {
-      const spawn = SPAWN_PREVIEW_POSITIONS[index % SPAWN_PREVIEW_POSITIONS.length];
+      const spawn = previewSpawns[index % previewSpawns.length];
       return {
         id: player.id,
         name: player.name,
@@ -258,6 +261,48 @@ function getPlayerAvatarUrl(player) {
 
 function renderAvatarMarkup(player, className = 'score-avatar') {
   return `<img class="${className}" src="${escapeAttribute(getPlayerAvatarUrl(player))}" alt="${escapeAttribute(player?.name || 'Player')}" />`;
+}
+
+function getThemePalette(themeId) {
+  const palettes = {
+    forest: {
+      background: 0x08110b,
+      floor: 0x102016,
+      grid: 0x1a3625,
+      wall: 0x2c4f35,
+      wallEdge: 0x5d8664,
+      wallTop: 0x88b38d,
+      border: 0x35563b,
+    },
+    ice: {
+      background: 0x07131d,
+      floor: 0x102534,
+      grid: 0x284657,
+      wall: 0x3a6076,
+      wallEdge: 0x8cb6cf,
+      wallTop: 0xd1efff,
+      border: 0x4d7388,
+    },
+    lava: {
+      background: 0x170805,
+      floor: 0x27110c,
+      grid: 0x4a2016,
+      wall: 0x5a241a,
+      wallEdge: 0xc96f4f,
+      wallTop: 0xffa16f,
+      border: 0x7e3322,
+    },
+    industrial: {
+      background: 0x0a0d12,
+      floor: 0x171c24,
+      grid: 0x242d38,
+      wall: 0x495362,
+      wallEdge: 0x8f99a9,
+      wallTop: 0xb8c0cc,
+      border: 0x5f6979,
+    },
+  };
+  return palettes[themeId] || palettes.forest;
 }
 
 // ─── HUD ─────────────────────────────────────────────────────────────────────
@@ -383,6 +428,9 @@ class GameScene extends Phaser.Scene {
     this.particles  = [];
     this.portals    = [];
     this.walls      = [];
+    this.movingWallSprites = {};
+    this.zoneOverlays = [];
+    this.themeId = 'forest';
   }
 
   preload() {
@@ -423,15 +471,31 @@ class GameScene extends Phaser.Scene {
   }
 
   buildMap(data) {
+    this.themeId = data?.theme?.id || 'forest';
+    if (this.mapGfx) this.mapGfx.destroy();
+    this.portals.forEach((portal) => {
+      portal.gfx.destroy();
+      portal.label.destroy();
+    });
+    Object.values(this.movingWallSprites).forEach((wall) => {
+      wall.gfx.destroy();
+    });
+    this.zoneOverlays.forEach((zone) => zone.destroy());
+    this.portals = [];
+    this.movingWallSprites = {};
+    this.zoneOverlays = [];
+
     this.mapGfx = this.add.graphics();
     const g = this.mapGfx;
+    const palette = getThemePalette(this.themeId);
 
     // Floor
-    g.fillStyle(0x0d1120, 1);
+    this.cameras.main.setBackgroundColor(palette.background);
+    g.fillStyle(palette.floor, 1);
     g.fillRect(0, 0, MAP_W, MAP_H);
 
     // Floor grid
-    g.lineStyle(1, 0x161d2f, 0.6);
+    g.lineStyle(1, palette.grid, 0.6);
     for (let x = 0; x < MAP_W; x += 40) { g.beginPath(); g.moveTo(x,0); g.lineTo(x,MAP_H); g.strokePath(); }
     for (let y = 0; y < MAP_H; y += 40) { g.beginPath(); g.moveTo(0,y); g.lineTo(MAP_W,y); g.strokePath(); }
 
@@ -441,33 +505,53 @@ class GameScene extends Phaser.Scene {
       g.fillStyle(0x000000, 0.5);
       g.fillRect(wall.x+4, wall.y+4, wall.w, wall.h);
       // Body
-      g.fillStyle(0x1e2840, 1);
+      g.fillStyle(palette.wall, 1);
       g.fillRect(wall.x, wall.y, wall.w, wall.h);
       // Edge highlight
-      g.lineStyle(1, 0x3a4f6e, 1);
+      g.lineStyle(1, palette.wallEdge, 1);
       g.strokeRect(wall.x, wall.y, wall.w, wall.h);
       // Top edge shine
-      g.lineStyle(2, 0x5a7fa0, 0.5);
+      g.lineStyle(2, palette.wallTop, 0.5);
       g.beginPath(); g.moveTo(wall.x, wall.y); g.lineTo(wall.x+wall.w, wall.y); g.strokePath();
     }
 
     // Border
-    g.lineStyle(3, 0x2a3850, 1);
+    g.lineStyle(3, palette.border, 1);
     g.strokeRect(1, 1, MAP_W-2, MAP_H-2);
+
+    for (const zone of data.zones || []) {
+      const zoneGfx = this.add.graphics();
+      if (zone.type === 'slow') {
+        zoneGfx.fillStyle(0x3c8d44, 0.22);
+        zoneGfx.lineStyle(2, 0x6fcb78, 0.6);
+      } else if (zone.type === 'lava') {
+        zoneGfx.fillStyle(0xb3321d, 0.24);
+        zoneGfx.lineStyle(2, 0xff7b32, 0.7);
+      }
+      zoneGfx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      zoneGfx.strokeRect(zone.x, zone.y, zone.w, zone.h);
+      this.zoneOverlays.push(zoneGfx);
+    }
 
     // Portals
     for (const portal of data.portals) {
-      const col = portal.id.startsWith('A') ? 0x00aaff : 0xaa44ff;
+      const portalColors = { A: 0x00aaff, B: 0xaa66ff, C: 0x33ddaa };
+      const col = portalColors[portal.id] || 0x00aaff;
       const portalGfx = this.add.graphics();
       portalGfx.fillStyle(col, 0.2);
-      portalGfx.fillCircle(portal.x, portal.y, 20);
+      portalGfx.fillCircle(portal.x, portal.y, data.portalRadius || 20);
       portalGfx.lineStyle(2, col, 1);
-      portalGfx.strokeCircle(portal.x, portal.y, 20);
+      portalGfx.strokeCircle(portal.x, portal.y, data.portalRadius || 20);
       // Label
-      const label = this.add.text(portal.x, portal.y, portal.id, {
-        fontFamily: 'Rajdhani', fontSize: '11px', color: '#ffffff88',
+      const label = this.add.text(portal.x, portal.y, `${portal.id}->${portal.pair}`, {
+        fontFamily: 'Rajdhani', fontSize: '11px', color: '#ffffffaa',
       }).setOrigin(0.5);
       this.portals.push({ gfx: portalGfx, label, ...portal, color: col });
+    }
+
+    for (const wall of data.movingWalls || []) {
+      const gfx = this.add.graphics();
+      this.movingWallSprites[wall.id] = { gfx };
     }
 
     this.walls = data.walls;
@@ -507,6 +591,7 @@ class GameScene extends Phaser.Scene {
 
     // Update HUD
     updateHUD(state);
+    this.updateMovingWalls(state.movingWalls || []);
 
     // Pulse vignette effect based on urgency
     if (state.bombHolder === myPlayerId) {
@@ -515,6 +600,27 @@ class GameScene extends Phaser.Scene {
         `inset 0 0 ${urgency * 80}px rgba(255,60,60,${urgency * 0.5})`;
     } else {
       document.getElementById('game-canvas-wrap').style.boxShadow = '';
+    }
+  }
+
+  updateMovingWalls(movingWalls) {
+    const activeIds = new Set(movingWalls.map((wall) => wall.id));
+    for (const wall of movingWalls) {
+      if (!this.movingWallSprites[wall.id]) {
+        this.movingWallSprites[wall.id] = { gfx: this.add.graphics() };
+      }
+      const sprite = this.movingWallSprites[wall.id].gfx;
+      sprite.clear();
+      sprite.fillStyle(0x6d7688, 0.95);
+      sprite.fillRect(wall.x, wall.y, wall.w, wall.h);
+      sprite.lineStyle(2, 0xc0c8d8, 0.8);
+      sprite.strokeRect(wall.x, wall.y, wall.w, wall.h);
+    }
+
+    for (const [id, sprite] of Object.entries(this.movingWallSprites)) {
+      if (!activeIds.has(id)) {
+        sprite.gfx.clear();
+      }
     }
   }
 
@@ -897,10 +1003,11 @@ socket.on('gameStart', (data) => {
   if (data.scores) localScores = data.scores;
 
   if (gameScene) {
+    gameScene.buildMap(mapData);
     gameScene.prepareForRound(data.firstBombHolder);
   }
 
-  showGameMessage('GO!  WASD / Arrows move, Space dashes', 1800);
+  showGameMessage(`GO! ${mapData?.theme?.name || 'Arena'} rules are live`, 1800);
 });
 
 socket.on('gameState', (state) => {
@@ -932,6 +1039,13 @@ socket.on('explosion', (data) => {
     ? '💥 YOU EXPLODED!'
     : `💥 ${data.name} exploded!`;
   showGameMessage(msg, 2000);
+});
+
+socket.on('hazardEliminated', (data) => {
+  const msg = data.playerId === myPlayerId
+    ? `You were consumed by ${data.hazard}!`
+    : `${data.name} fell to ${data.hazard}!`;
+  showGameMessage(msg, 2200);
 });
 
 socket.on('gameOver', (data) => {
