@@ -292,6 +292,12 @@ html, body {
   text-align: center; font-size: 0.8rem;
   color: var(--text-dim); margin-top: 10px;
 }
+.waiting-hint.is-connected {
+  color: var(--safe);
+}
+.waiting-hint.is-error {
+  color: #ff7a7a;
+}
 .waiting-msg {
   margin-top: 12px;
   min-height: 1.2em;

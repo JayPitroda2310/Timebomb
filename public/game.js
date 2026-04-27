@@ -32,11 +32,13 @@ function resolveSocketServerUrl() {
 let socket = null;
 let currentServerUrl = '';
 
-function setConnectionStatus(message, isError = false) {
+function setConnectionStatus(message, state = 'default') {
   const el = document.getElementById('connection-status');
   if (!el) return;
   el.textContent = message;
-  el.style.color = isError ? '#ff7a7a' : '';
+  el.classList.remove('is-connected', 'is-error');
+  if (state === 'connected') el.classList.add('is-connected');
+  if (state === 'error') el.classList.add('is-error');
 }
 
 function normalizeServerUrl(rawUrl) {
@@ -60,7 +62,7 @@ function connectSocket(serverUrl) {
 
   currentServerUrl = resolvedUrl;
   window.localStorage.setItem('timeBombServerUrl', resolvedUrl);
-  setConnectionStatus(`Connecting to ${resolvedUrl}...`);
+  setConnectionStatus('Connecting to server...');
 
   socket = io(resolvedUrl, {
     transports: ['websocket'],
@@ -973,20 +975,20 @@ function ensureSocketConnection() {
 
   if (!socket.connected) {
     socket.connect();
-    setConnectionStatus(`Connecting to ${currentServerUrl}...`);
+    setConnectionStatus('Connecting to server...');
   }
 }
 
 function registerSocketEvents() {
 socket.on('connect', () => {
   console.log('Connected:', socket.id);
-  setConnectionStatus(`Connected to ${currentServerUrl}`);
+  setConnectionStatus('Connected to server', 'connected');
   setError('');
   setWaitingMessage('');
 });
 
 socket.on('connect_error', () => {
-  setConnectionStatus(`Could not connect to ${currentServerUrl}`, true);
+  setConnectionStatus('Could not connect to server', 'error');
   if (currentPhase === 'waiting') {
     setWaitingMessage('Cannot reach the game server right now.');
   } else {
@@ -1178,7 +1180,7 @@ socket.on('playerLeft', (data) => {
 });
 
 socket.on('disconnect', () => {
-  setConnectionStatus(`Disconnected from ${currentServerUrl}`, true);
+  setConnectionStatus('Disconnected from server', 'error');
   if (currentPhase === 'playing') {
     showGameMessage('Disconnected from server', 3000);
   } else {
