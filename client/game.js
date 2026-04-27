@@ -267,6 +267,110 @@ function renderAvatarMarkup(player, className = 'score-avatar') {
 
 function getThemePalette(themeId) {
   const palettes = {
+    'neon-city': {
+      background: 0x070b16,
+      floor: 0x121a2d,
+      grid: 0x233251,
+      wall: 0x34415f,
+      wallEdge: 0x85a4df,
+      wallTop: 0x5afff6,
+      border: 0xff4fd8,
+      accent: 0x42efff,
+      accent2: 0xff4fd8,
+      accent3: 0xffcf4a,
+      shadow: 0x05070d,
+    },
+    lava: {
+      background: 0x170805,
+      floor: 0x2a1610,
+      grid: 0x4f2819,
+      wall: 0x66443b,
+      wallEdge: 0xd78a63,
+      wallTop: 0xffbe73,
+      border: 0xff6a00,
+      accent: 0xff5a1f,
+      accent2: 0xffbf00,
+      accent3: 0xffd166,
+      shadow: 0x090303,
+    },
+    ice: {
+      background: 0x081521,
+      floor: 0xdceefb,
+      grid: 0xbcd8ef,
+      wall: 0x77b7e8,
+      wallEdge: 0xf4fbff,
+      wallTop: 0xffffff,
+      border: 0x8ddcff,
+      accent: 0x27d3ff,
+      accent2: 0x7af6ff,
+      accent3: 0x5aa7ff,
+      shadow: 0x0a1c2f,
+    },
+    ruins: {
+      background: 0x18170d,
+      floor: 0x595133,
+      grid: 0x776c43,
+      wall: 0x9a8b61,
+      wallEdge: 0xd7c88f,
+      wallTop: 0xe9dda9,
+      border: 0x9be24f,
+      accent: 0xa3ff6a,
+      accent2: 0x7fc941,
+      accent3: 0xd5b56f,
+      shadow: 0x0f1008,
+    },
+    'space-station': {
+      background: 0x0b0f17,
+      floor: 0x242a36,
+      grid: 0x3a4354,
+      wall: 0x5a6372,
+      wallEdge: 0xc5d0e2,
+      wallTop: 0x8cebff,
+      border: 0x8d97ab,
+      accent: 0x57d8ff,
+      accent2: 0x8471ff,
+      accent3: 0xffc83d,
+      shadow: 0x05070b,
+    },
+    desert: {
+      background: 0x2b2112,
+      floor: 0xd8ba73,
+      grid: 0xc5a45d,
+      wall: 0xb79761,
+      wallEdge: 0xf0d89b,
+      wallTop: 0xfff0ba,
+      border: 0xe0c15a,
+      accent: 0xffd76c,
+      accent2: 0xc6922a,
+      accent3: 0xa8d25f,
+      shadow: 0x1a1209,
+    },
+    haunted: {
+      background: 0x130d1c,
+      floor: 0x33243e,
+      grid: 0x493558,
+      wall: 0x5b4c67,
+      wallEdge: 0xb8a9c9,
+      wallTop: 0xeadcff,
+      border: 0xb15dff,
+      accent: 0xc56cff,
+      accent2: 0x7f4bff,
+      accent3: 0xffa3d8,
+      shadow: 0x09060d,
+    },
+    jungle: {
+      background: 0x0a1708,
+      floor: 0x4f4528,
+      grid: 0x665a34,
+      wall: 0x8c8359,
+      wallEdge: 0xd4cb9a,
+      wallTop: 0xebdeab,
+      border: 0x6ae35b,
+      accent: 0x9cff76,
+      accent2: 0x57bf44,
+      accent3: 0xc0a05b,
+      shadow: 0x061005,
+    },
     forest: {
       background: 0x08110b,
       floor: 0x102016,
@@ -275,24 +379,10 @@ function getThemePalette(themeId) {
       wallEdge: 0x5d8664,
       wallTop: 0x88b38d,
       border: 0x35563b,
-    },
-    ice: {
-      background: 0x07131d,
-      floor: 0x102534,
-      grid: 0x284657,
-      wall: 0x3a6076,
-      wallEdge: 0x8cb6cf,
-      wallTop: 0xd1efff,
-      border: 0x4d7388,
-    },
-    lava: {
-      background: 0x170805,
-      floor: 0x27110c,
-      grid: 0x4a2016,
-      wall: 0x5a241a,
-      wallEdge: 0xc96f4f,
-      wallTop: 0xffa16f,
-      border: 0x7e3322,
+      accent: 0x7ad372,
+      accent2: 0x4cae5d,
+      accent3: 0xa2d59b,
+      shadow: 0x050906,
     },
     industrial: {
       background: 0x0a0d12,
@@ -302,9 +392,50 @@ function getThemePalette(themeId) {
       wallEdge: 0x8f99a9,
       wallTop: 0xb8c0cc,
       border: 0x5f6979,
+      accent: 0x66d1ff,
+      accent2: 0x8d84ff,
+      accent3: 0xffc746,
+      shadow: 0x05070b,
     },
   };
   return palettes[themeId] || palettes.forest;
+}
+
+function getArenaPolygon(inset = 24, cornerCut = 60) {
+  return [
+    inset + cornerCut, inset,
+    MAP_W - inset - cornerCut, inset,
+    MAP_W - inset, inset + cornerCut,
+    MAP_W - inset, MAP_H - inset - cornerCut,
+    MAP_W - inset - cornerCut, MAP_H - inset,
+    inset + cornerCut, MAP_H - inset,
+    inset, MAP_H - inset - cornerCut,
+    inset, inset + cornerCut,
+  ];
+}
+
+function drawPolygon(g, points, fillColor, fillAlpha = 1, strokeColor = null, strokeWidth = 0, strokeAlpha = 1) {
+  g.fillStyle(fillColor, fillAlpha);
+  g.beginPath();
+  g.moveTo(points[0], points[1]);
+  for (let i = 2; i < points.length; i += 2) {
+    g.lineTo(points[i], points[i + 1]);
+  }
+  g.closePath();
+  g.fillPath();
+
+  if (strokeColor !== null && strokeWidth > 0) {
+    g.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+    g.strokePoints(pointsToPhaser(points), true);
+  }
+}
+
+function pointsToPhaser(points) {
+  const out = [];
+  for (let i = 0; i < points.length; i += 2) {
+    out.push(new Phaser.Geom.Point(points[i], points[i + 1]));
+  }
+  return out;
 }
 
 // ─── HUD ─────────────────────────────────────────────────────────────────────
@@ -449,6 +580,7 @@ class GameScene extends Phaser.Scene {
     this.rotatingBarSprites = {};
     this.activeEventOverlay = null;
     this.themeId = 'forest';
+    this.mapId = 'forest';
   }
 
   preload() {
@@ -489,7 +621,8 @@ class GameScene extends Phaser.Scene {
   }
 
   buildMap(data) {
-    this.themeId = data?.theme?.id || 'forest';
+    this.themeId = data?.theme?.visualId || data?.theme?.id || 'forest';
+    this.mapId = data?.id || this.themeId;
     if (this.mapGfx) this.mapGfx.destroy();
     this.portals.forEach((portal) => {
       portal.container.destroy();
@@ -512,15 +645,10 @@ class GameScene extends Phaser.Scene {
     const g = this.mapGfx;
     const palette = getThemePalette(this.themeId);
 
-    // Floor
     this.cameras.main.setBackgroundColor(palette.background);
-    g.fillStyle(palette.floor, 1);
+    g.fillStyle(palette.shadow || palette.background, 1);
     g.fillRect(0, 0, MAP_W, MAP_H);
-
-    // Floor grid
-    g.lineStyle(1, palette.grid, 0.6);
-    for (let x = 0; x < MAP_W; x += 40) { g.beginPath(); g.moveTo(x,0); g.lineTo(x,MAP_H); g.strokePath(); }
-    for (let y = 0; y < MAP_H; y += 40) { g.beginPath(); g.moveTo(0,y); g.lineTo(MAP_W,y); g.strokePath(); }
+    this.drawArenaBackdrop(g, palette, data);
 
     // Walls
     for (const wall of data.walls) {
@@ -543,9 +671,7 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    // Border
-    g.lineStyle(3, palette.border, 1);
-    g.strokeRect(1, 1, MAP_W-2, MAP_H-2);
+    this.drawArenaBorder(g, palette, data);
 
     for (const wall of data.movingWalls || []) {
       const gfx = this.add.graphics();
@@ -558,6 +684,126 @@ class GameScene extends Phaser.Scene {
     }
 
     this.walls = data.walls;
+  }
+
+  drawArenaBackdrop(g, palette, data) {
+    const frame = data?.frame || {};
+    const inset = frame.inset || 24;
+    const cornerCut = frame.cornerCut || 60;
+    const octagonPoints = pointsToPhaser(getArenaPolygon(inset, cornerCut));
+
+    switch (frame.kind) {
+      case 'octagon':
+      case 'temple':
+      case 'manor':
+        g.fillStyle(palette.floor, 1);
+        g.fillPoints(octagonPoints, true);
+        break;
+      case 'ring':
+        g.fillStyle(palette.accent, 0.35);
+        g.fillEllipse(MAP_W / 2, MAP_H / 2, MAP_W - 110, MAP_H - 70);
+        g.fillStyle(palette.background, 0.88);
+        g.fillEllipse(MAP_W / 2, MAP_H / 2, MAP_W - 180, MAP_H - 140);
+        g.fillStyle(palette.floor, 1);
+        g.fillEllipse(MAP_W / 2, MAP_H / 2, MAP_W - 250, MAP_H - 205);
+        break;
+      default:
+        g.fillStyle(palette.floor, 1);
+        g.fillRect(0, 0, MAP_W, MAP_H);
+        break;
+    }
+
+    if (frame.kind !== 'ring') {
+      g.lineStyle(1, palette.grid, this.mapId === 'ice-cavern' ? 0.22 : 0.4);
+      for (let x = 70; x < MAP_W - 70; x += this.mapId === 'neon-city' ? 44 : 52) {
+        g.beginPath(); g.moveTo(x, 52); g.lineTo(x, MAP_H - 52); g.strokePath();
+      }
+      for (let y = 52; y < MAP_H - 52; y += this.mapId === 'neon-city' ? 44 : 52) {
+        g.beginPath(); g.moveTo(70, y); g.lineTo(MAP_W - 70, y); g.strokePath();
+      }
+    }
+
+    switch (this.mapId) {
+      case 'neon-city':
+        g.fillStyle(palette.accent2, 0.16);
+        g.fillRect(104, 520, 692, 8);
+        g.fillStyle(palette.accent, 0.22);
+        g.fillRect(92, 168, 9, 264);
+        g.fillRect(799, 168, 9, 264);
+        g.fillCircle(450, 300, 66);
+        break;
+      case 'lava-pit':
+        g.fillStyle(palette.background, 0.95);
+        g.fillRect(96, 64, MAP_W - 192, MAP_H - 128);
+        g.fillStyle(palette.floor, 1);
+        g.fillEllipse(MAP_W / 2, MAP_H / 2, MAP_W - 254, MAP_H - 210);
+        g.fillStyle(palette.accent2, 0.18);
+        g.fillCircle(450, 300, 86);
+        break;
+      case 'ice-cavern':
+        for (const [x, y, r] of [[142, 122, 18], [758, 122, 18], [178, 480, 14], [722, 486, 14], [450, 90, 24]]) {
+          g.fillStyle(0xffffff, 0.28);
+          g.fillCircle(x, y, r);
+        }
+        break;
+      case 'ancient-ruins':
+        g.fillStyle(palette.accent2, 0.18);
+        g.fillCircle(170, 455, 38);
+        g.fillCircle(730, 455, 38);
+        g.fillCircle(210, 146, 38);
+        g.fillCircle(690, 146, 38);
+        break;
+      case 'space-station':
+        g.fillStyle(palette.accent3, 0.28);
+        g.fillRect(108, 526, 118, 8);
+        g.fillRect(674, 526, 118, 8);
+        g.fillStyle(palette.accent, 0.18);
+        g.fillRect(118, 160, 12, 280);
+        g.fillRect(770, 160, 12, 280);
+        break;
+      case 'desert-temple':
+        g.fillStyle(palette.accent2, 0.2);
+        g.fillCircle(450, 300, 80);
+        break;
+      case 'haunted-manor':
+        g.fillStyle(palette.accent, 0.18);
+        g.fillCircle(450, 300, 92);
+        g.fillRect(184, 88, 532, 4);
+        g.fillRect(184, 508, 532, 4);
+        break;
+      case 'jungle-canopy':
+        g.fillStyle(palette.accent2, 0.22);
+        g.fillCircle(450, 300, 88);
+        g.fillRect(354, 92, 192, 12);
+        g.fillRect(354, 496, 192, 12);
+        break;
+    }
+  }
+
+  drawArenaBorder(g, palette, data) {
+    const frame = data?.frame || {};
+    const inset = frame.inset || 24;
+    const cornerCut = frame.cornerCut || 60;
+
+    if (frame.kind === 'ring') {
+      g.lineStyle(18, palette.accent, 0.42);
+      g.strokeEllipse(MAP_W / 2, MAP_H / 2, MAP_W - 112, MAP_H - 72);
+      g.lineStyle(6, palette.border, 0.95);
+      g.strokeEllipse(MAP_W / 2, MAP_H / 2, MAP_W - 150, MAP_H - 110);
+      return;
+    }
+
+    if (frame.kind === 'octagon' || frame.kind === 'temple' || frame.kind === 'manor') {
+      const points = pointsToPhaser(getArenaPolygon(inset, cornerCut));
+      g.lineStyle(12, palette.border, 0.08);
+      g.strokePoints(points, true);
+      g.lineStyle(4, palette.border, 0.95);
+      g.strokePoints(points, true);
+      return;
+    }
+
+    g.lineStyle(3, palette.border, 1);
+    g.strokeRect(1, 1, MAP_W - 2, MAP_H - 2);
   }
 
   updateFromState(state) {

@@ -62,13 +62,6 @@ const DEFAULT_SPAWN_CELLS = [
   { col: 7, row: 1 },
 ];
 
-const THEMES = [
-  { id: 'forest', name: 'Forest' },
-  { id: 'ice', name: 'Ice' },
-  { id: 'lava', name: 'Lava' },
-  { id: 'industrial', name: 'Industrial' },
-];
-
 const rooms = new Map();
 
 function createRoom(roomId) {
@@ -191,64 +184,314 @@ function getAllOpenCells() {
   return cells;
 }
 
-function buildEvenObstacleLayout() {
-  const variants = shuffle([
-    [
-      { shape: 'rect', x: 405, y: 220, w: 90, h: 160 },
-      { shape: 'rect', x: 205, y: 92, w: 155, h: 54 },
-      { shape: 'rect', x: 580, y: 92, w: 155, h: 54 },
-      { shape: 'rect', x: 205, y: 454, w: 155, h: 54 },
-      { shape: 'rect', x: 580, y: 454, w: 155, h: 54 },
-    ],
-    [
-      { shape: 'rect', x: 370, y: 260, w: 160, h: 80 },
-      { shape: 'rect', x: 132, y: 206, w: 72, h: 165 },
-      { shape: 'rect', x: 696, y: 206, w: 72, h: 165 },
-      { shape: 'rect', x: 305, y: 82, w: 120, h: 58 },
-      { shape: 'rect', x: 475, y: 460, w: 120, h: 58 },
-    ],
-    [
-      { shape: 'circle', x: 450, y: 300, r: 62 },
-      { shape: 'rect', x: 190, y: 104, w: 175, h: 50 },
-      { shape: 'rect', x: 535, y: 104, w: 175, h: 50 },
-      { shape: 'rect', x: 190, y: 446, w: 175, h: 50 },
-      { shape: 'rect', x: 535, y: 446, w: 175, h: 50 },
-    ],
-  ]);
-  return variants[0];
+function rect(x, y, w, h) {
+  return { shape: 'rect', x, y, w, h };
 }
 
-function buildStrategicPortals() {
-  return [
-    { id: 'TELEPORT-A1', pairId: 'A', side: 0, kind: 'teleport', x: MAP_W / 2, y: 76 },
-    { id: 'TELEPORT-A2', pairId: 'A', side: 1, kind: 'teleport', x: MAP_W / 2, y: MAP_H - 76 },
-    { id: 'TELEPORT-B1', pairId: 'B', side: 0, kind: 'teleport', x: 86, y: MAP_H / 2 },
-    { id: 'TELEPORT-B2', pairId: 'B', side: 1, kind: 'teleport', x: MAP_W - 86, y: MAP_H / 2 },
-  ];
+function circle(x, y, r) {
+  return { shape: 'circle', x, y, r };
 }
 
-function generateMatchMap(playerCount) {
-  const theme = choice(THEMES);
-  const spawnCells = DEFAULT_SPAWN_CELLS.slice(0, playerCount);
-  const openCells = getAllOpenCells();
-  const walls = buildEvenObstacleLayout();
+function createPortals(points) {
+  return points.flatMap((pair, index) => ([
+    {
+      id: `TELEPORT-${index + 1}-A`,
+      pairId: `P${index + 1}`,
+      side: 0,
+      kind: 'teleport',
+      x: pair[0].x,
+      y: pair[0].y,
+    },
+    {
+      id: `TELEPORT-${index + 1}-B`,
+      pairId: `P${index + 1}`,
+      side: 1,
+      kind: 'teleport',
+      x: pair[1].x,
+      y: pair[1].y,
+    },
+  ]));
+}
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function createMapDefinition({ id, themeId, visualId = id, name, walls, portals, spawns, frame }) {
   return {
+    id,
     width: MAP_W,
     height: MAP_H,
     grid: { cols: GRID_COLS, rows: GRID_ROWS, cellW: CELL_W, cellH: CELL_H },
-    theme,
+    theme: { id: themeId, visualId, name },
     walls,
-    openCells,
-    portals: buildStrategicPortals(),
-    portalRadius: PORTAL_RADIUS,
-    portalCooldownMs: PORTAL_COOLDOWN_MS,
-    portalSwapStartedAt: Date.now(),
-    portalSwapIntervalMs: PORTAL_SWAP_INTERVAL_MS,
-    spawns: spawnCells.map(toWorldPosition),
+    portals,
+    spawns,
+    frame,
     rotatingBars: [],
     movingWalls: [],
   };
+}
+
+const MAP_LIBRARY = [
+  createMapDefinition({
+    id: 'neon-city',
+    themeId: 'industrial',
+    name: 'Neon City',
+    frame: { kind: 'octagon', inset: 26, cornerCut: 62 },
+    spawns: [
+      { x: 152, y: 110 }, { x: 748, y: 110 }, { x: 152, y: 490 },
+      { x: 748, y: 490 }, { x: 450, y: 120 }, { x: 450, y: 480 },
+    ],
+    portals: createPortals([
+      [{ x: 150, y: 468 }, { x: 750, y: 468 }],
+      [{ x: 250, y: 132 }, { x: 650, y: 132 }],
+    ]),
+    walls: [
+      rect(390, 235, 120, 130),
+      rect(286, 180, 42, 118),
+      rect(572, 180, 42, 118),
+      rect(286, 320, 42, 118),
+      rect(572, 320, 42, 118),
+      rect(358, 176, 50, 38),
+      rect(492, 176, 50, 38),
+      rect(358, 388, 50, 38),
+      rect(492, 388, 50, 38),
+      rect(202, 226, 44, 44),
+      rect(654, 226, 44, 44),
+      rect(202, 330, 44, 44),
+      rect(654, 330, 44, 44),
+      rect(144, 120, 28, 28),
+      rect(728, 120, 28, 28),
+      rect(144, 452, 28, 28),
+      rect(728, 452, 28, 28),
+    ],
+  }),
+  createMapDefinition({
+    id: 'lava-pit',
+    themeId: 'lava',
+    name: 'Lava Pit',
+    frame: { kind: 'ring', inset: 24 },
+    spawns: [
+      { x: 188, y: 126 }, { x: 712, y: 126 }, { x: 188, y: 474 },
+      { x: 712, y: 474 }, { x: 450, y: 112 }, { x: 450, y: 488 },
+    ],
+    portals: createPortals([
+      [{ x: 238, y: 146 }, { x: 662, y: 454 }],
+      [{ x: 238, y: 454 }, { x: 662, y: 146 }],
+    ]),
+    walls: [
+      circle(450, 300, 54),
+      rect(320, 198, 70, 42),
+      rect(510, 198, 70, 42),
+      rect(320, 360, 70, 42),
+      rect(510, 360, 70, 42),
+      rect(202, 244, 44, 44),
+      rect(654, 244, 44, 44),
+      rect(202, 312, 44, 44),
+      rect(654, 312, 44, 44),
+      rect(404, 124, 38, 38),
+      rect(458, 124, 38, 38),
+      rect(404, 438, 38, 38),
+      rect(458, 438, 38, 38),
+      rect(142, 156, 30, 30),
+      rect(728, 156, 30, 30),
+      rect(142, 414, 30, 30),
+      rect(728, 414, 30, 30),
+      rect(250, 90, 30, 30),
+      rect(620, 90, 30, 30),
+      rect(250, 480, 30, 30),
+      rect(620, 480, 30, 30),
+    ],
+  }),
+  createMapDefinition({
+    id: 'ice-cavern',
+    themeId: 'ice',
+    name: 'Ice Cavern',
+    frame: { kind: 'octagon', inset: 18, cornerCut: 72 },
+    spawns: [
+      { x: 172, y: 122 }, { x: 728, y: 122 }, { x: 172, y: 478 },
+      { x: 728, y: 478 }, { x: 450, y: 108 }, { x: 450, y: 492 },
+    ],
+    portals: createPortals([
+      [{ x: 180, y: 448 }, { x: 720, y: 448 }],
+      [{ x: 215, y: 150 }, { x: 685, y: 150 }],
+    ]),
+    walls: [
+      rect(384, 248, 132, 80),
+      rect(310, 138, 62, 110),
+      rect(528, 138, 62, 110),
+      rect(310, 352, 62, 110),
+      rect(528, 352, 62, 110),
+      rect(398, 128, 42, 42),
+      rect(460, 128, 42, 42),
+      rect(398, 430, 42, 42),
+      rect(460, 430, 42, 42),
+      circle(246, 214, 18),
+      circle(654, 214, 18),
+      circle(246, 386, 18),
+      circle(654, 386, 18),
+    ],
+  }),
+  createMapDefinition({
+    id: 'ancient-ruins',
+    themeId: 'ruins',
+    name: 'Ancient Ruins',
+    frame: { kind: 'temple', inset: 30 },
+    spawns: [
+      { x: 174, y: 132 }, { x: 726, y: 132 }, { x: 174, y: 468 },
+      { x: 726, y: 468 }, { x: 450, y: 116 }, { x: 450, y: 484 },
+    ],
+    portals: createPortals([
+      [{ x: 170, y: 455 }, { x: 730, y: 455 }],
+      [{ x: 210, y: 146 }, { x: 690, y: 146 }],
+    ]),
+    walls: [
+      rect(410, 250, 80, 100),
+      rect(278, 138, 42, 42),
+      rect(388, 120, 48, 48),
+      rect(464, 120, 48, 48),
+      rect(580, 138, 42, 42),
+      rect(244, 220, 38, 38),
+      rect(330, 220, 38, 38),
+      rect(532, 220, 38, 38),
+      rect(618, 220, 38, 38),
+      rect(244, 346, 38, 38),
+      rect(330, 346, 38, 38),
+      rect(532, 346, 38, 38),
+      rect(618, 346, 38, 38),
+      rect(278, 420, 42, 42),
+      rect(388, 432, 48, 48),
+      rect(464, 432, 48, 48),
+      rect(580, 420, 42, 42),
+    ],
+  }),
+  createMapDefinition({
+    id: 'space-station',
+    themeId: 'industrial',
+    name: 'Space Station',
+    frame: { kind: 'octagon', inset: 18, cornerCut: 66 },
+    spawns: [
+      { x: 166, y: 128 }, { x: 734, y: 128 }, { x: 166, y: 472 },
+      { x: 734, y: 472 }, { x: 450, y: 112 }, { x: 450, y: 488 },
+    ],
+    portals: createPortals([
+      [{ x: 208, y: 156 }, { x: 692, y: 156 }],
+      [{ x: 196, y: 456 }, { x: 704, y: 456 }],
+    ]),
+    walls: [
+      rect(388, 92, 124, 74),
+      rect(384, 246, 132, 108),
+      rect(278, 188, 56, 40),
+      rect(566, 188, 56, 40),
+      rect(278, 372, 56, 40),
+      rect(566, 372, 56, 40),
+      rect(214, 226, 40, 146),
+      rect(646, 226, 40, 146),
+      rect(320, 164, 78, 42),
+      rect(502, 164, 78, 42),
+      rect(320, 394, 78, 42),
+      rect(502, 394, 78, 42),
+    ],
+  }),
+  createMapDefinition({
+    id: 'desert-temple',
+    themeId: 'desert',
+    name: 'Desert Temple',
+    frame: { kind: 'octagon', inset: 26, cornerCut: 62 },
+    spawns: [
+      { x: 184, y: 126 }, { x: 716, y: 126 }, { x: 184, y: 474 },
+      { x: 716, y: 474 }, { x: 450, y: 110 }, { x: 450, y: 490 },
+    ],
+    portals: createPortals([
+      [{ x: 206, y: 162 }, { x: 694, y: 438 }],
+      [{ x: 206, y: 438 }, { x: 694, y: 162 }],
+    ]),
+    walls: [
+      rect(392, 256, 116, 88),
+      rect(306, 152, 88, 40),
+      rect(506, 152, 88, 40),
+      rect(306, 408, 88, 40),
+      rect(506, 408, 88, 40),
+      rect(226, 192, 42, 42),
+      rect(632, 192, 42, 42),
+      rect(226, 366, 42, 42),
+      rect(632, 366, 42, 42),
+      rect(364, 116, 40, 40),
+      rect(496, 116, 40, 40),
+      rect(364, 444, 40, 40),
+      rect(496, 444, 40, 40),
+    ],
+  }),
+  createMapDefinition({
+    id: 'haunted-manor',
+    themeId: 'haunted',
+    name: 'Haunted Manor',
+    frame: { kind: 'manor', inset: 24 },
+    spawns: [
+      { x: 190, y: 124 }, { x: 710, y: 124 }, { x: 190, y: 476 },
+      { x: 710, y: 476 }, { x: 450, y: 112 }, { x: 450, y: 488 },
+    ],
+    portals: createPortals([
+      [{ x: 176, y: 444 }, { x: 724, y: 444 }],
+      [{ x: 208, y: 150 }, { x: 692, y: 150 }],
+    ]),
+    walls: [
+      circle(450, 300, 58),
+      rect(306, 168, 52, 104),
+      rect(542, 168, 52, 104),
+      rect(306, 328, 52, 104),
+      rect(542, 328, 52, 104),
+      rect(392, 162, 42, 42),
+      rect(466, 162, 42, 42),
+      rect(392, 396, 42, 42),
+      rect(466, 396, 42, 42),
+      rect(220, 238, 34, 34),
+      rect(646, 238, 34, 34),
+      rect(220, 328, 34, 34),
+      rect(646, 328, 34, 34),
+    ],
+  }),
+  createMapDefinition({
+    id: 'jungle-canopy',
+    themeId: 'jungle',
+    name: 'Jungle Canopy',
+    frame: { kind: 'temple', inset: 22 },
+    spawns: [
+      { x: 188, y: 122 }, { x: 712, y: 122 }, { x: 188, y: 478 },
+      { x: 712, y: 478 }, { x: 450, y: 108 }, { x: 450, y: 492 },
+    ],
+    portals: createPortals([
+      [{ x: 186, y: 448 }, { x: 714, y: 448 }],
+      [{ x: 198, y: 148 }, { x: 702, y: 148 }],
+    ]),
+    walls: [
+      circle(450, 300, 56),
+      circle(306, 220, 28),
+      circle(594, 220, 28),
+      circle(306, 380, 28),
+      circle(594, 380, 28),
+      circle(238, 184, 24),
+      circle(662, 184, 24),
+      circle(238, 416, 24),
+      circle(662, 416, 24),
+      rect(394, 118, 112, 40),
+      rect(394, 442, 112, 40),
+      rect(430, 176, 40, 40),
+      rect(430, 384, 40, 40),
+    ],
+  }),
+];
+
+function generateMatchMap(_playerCount) {
+  const template = choice(MAP_LIBRARY);
+  const map = clone(template);
+  map.openCells = getAllOpenCells();
+  map.portalRadius = PORTAL_RADIUS;
+  map.portalCooldownMs = PORTAL_COOLDOWN_MS;
+  map.portalSwapStartedAt = Date.now();
+  map.portalSwapIntervalMs = PORTAL_SWAP_INTERVAL_MS;
+  return map;
 }
 
 function getActiveMovingWalls(map, now) {
@@ -459,10 +702,12 @@ function tryProcessPortal(map, player, players, now) {
 
 function getRoundMapData(map) {
   return {
+    id: map.id,
     width: map.width,
     height: map.height,
     grid: map.grid,
     theme: map.theme,
+    frame: map.frame,
     walls: map.walls,
     portals: getPortalState(map, Date.now()),
     portalRadius: map.portalRadius,
@@ -474,7 +719,13 @@ function getRoundMapData(map) {
 }
 
 function getFallbackMap() {
-  return generateMatchMap(MAX_PLAYERS);
+  const map = clone(MAP_LIBRARY[0]);
+  map.openCells = getAllOpenCells();
+  map.portalRadius = PORTAL_RADIUS;
+  map.portalCooldownMs = PORTAL_COOLDOWN_MS;
+  map.portalSwapStartedAt = Date.now();
+  map.portalSwapIntervalMs = PORTAL_SWAP_INTERVAL_MS;
+  return map;
 }
 
 function eliminatePlayer(room, player, reason) {
