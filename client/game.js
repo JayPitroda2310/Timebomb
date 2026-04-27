@@ -104,17 +104,6 @@ const CHARACTER_OPTIONS = [
     avatarUrl: '/characters/Forest_Ranger_3/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
   },
 ];
-const MAP_TEXTURE_IDS = [
-  'neon-city',
-  'lava-pit',
-  'ice-cavern',
-  'ancient-ruins',
-  'space-station',
-  'desert-temple',
-  'haunted-manor',
-  'jungle-canopy',
-];
-
 // ─── SCREEN HELPERS ──────────────────────────────────────────────────────────
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -599,12 +588,6 @@ class GameScene extends Phaser.Scene {
         this.load.image(option.textureKey, option.avatarUrl);
       }
     }
-    for (const mapId of MAP_TEXTURE_IDS) {
-      const textureKey = `map-${mapId}`;
-      if (!this.textures.exists(textureKey)) {
-        this.load.image(textureKey, `maps/${mapId}.png`);
-      }
-    }
   }
 
   create() {
@@ -639,7 +622,6 @@ class GameScene extends Phaser.Scene {
   buildMap(data) {
     this.themeId = data?.theme?.visualId || data?.theme?.id || 'forest';
     this.mapId = data?.id || this.themeId;
-    if (this.mapBackdrop) this.mapBackdrop.destroy();
     if (this.mapGfx) this.mapGfx.destroy();
     this.portals.forEach((portal) => {
       portal.container.destroy();
@@ -661,46 +643,17 @@ class GameScene extends Phaser.Scene {
     this.mapGfx = this.add.graphics();
     const g = this.mapGfx;
     const palette = getThemePalette(this.themeId);
-    const mapTextureKey = `map-${this.mapId}`;
 
     this.cameras.main.setBackgroundColor(palette.background);
-    if (this.textures.exists(mapTextureKey)) {
-      this.mapBackdrop = this.add.image(MAP_W / 2, MAP_H / 2, mapTextureKey);
-      this.mapBackdrop.setDisplaySize(MAP_W, MAP_H);
-      this.mapBackdrop.setAlpha(1);
-      g.fillStyle(0x000000, 0.12);
-      g.fillRect(0, 0, MAP_W, MAP_H);
-    } else {
-      g.fillStyle(palette.shadow || palette.background, 1);
-      g.fillRect(0, 0, MAP_W, MAP_H);
-      this.drawArenaBackdrop(g, palette, data);
+    g.fillStyle(palette.shadow || palette.background, 1);
+    g.fillRect(0, 0, MAP_W, MAP_H);
+    this.drawArenaBackdrop(g, palette, data);
+
+    for (const wall of data.walls) {
+      this.drawWallVisual(g, palette, wall);
     }
 
-    if (!this.textures.exists(mapTextureKey)) {
-      for (const wall of data.walls) {
-        if (wall.shape === 'circle') {
-          g.fillStyle(0x000000, 0.45);
-          g.fillCircle(wall.x + 3, wall.y + 3, wall.r);
-          g.fillStyle(palette.wall, 1);
-          g.fillCircle(wall.x, wall.y, wall.r);
-          g.lineStyle(2, palette.wallEdge, 1);
-          g.strokeCircle(wall.x, wall.y, wall.r);
-        } else {
-          g.fillStyle(0x000000, 0.5);
-          g.fillRect(wall.x + 4, wall.y + 4, wall.w, wall.h);
-          g.fillStyle(palette.wall, 1);
-          g.fillRect(wall.x, wall.y, wall.w, wall.h);
-          g.lineStyle(1, palette.wallEdge, 1);
-          g.strokeRect(wall.x, wall.y, wall.w, wall.h);
-          g.lineStyle(2, palette.wallTop, 0.5);
-          g.beginPath(); g.moveTo(wall.x, wall.y); g.lineTo(wall.x + wall.w, wall.y); g.strokePath();
-        }
-      }
-    }
-
-    if (!this.textures.exists(mapTextureKey)) {
-      this.drawArenaBorder(g, palette, data);
-    }
+    this.drawArenaBorder(g, palette, data);
 
     for (const wall of data.movingWalls || []) {
       const gfx = this.add.graphics();
@@ -833,6 +786,130 @@ class GameScene extends Phaser.Scene {
 
     g.lineStyle(3, palette.border, 1);
     g.strokeRect(1, 1, MAP_W - 2, MAP_H - 2);
+  }
+
+  drawWallVisual(g, palette, wall) {
+    if (wall.shape === 'circle') {
+      this.drawCircleWallVisual(g, palette, wall);
+      return;
+    }
+
+    const x = wall.x;
+    const y = wall.y;
+    const w = wall.w;
+    const h = wall.h;
+    const small = Math.min(w, h) <= 42;
+    const tall = h > w * 1.35;
+
+    g.fillStyle(0x000000, 0.32);
+    g.fillRect(x + 4, y + 4, w, h);
+    g.fillStyle(palette.wall, 1);
+    g.fillRect(x, y, w, h);
+    g.lineStyle(1, palette.wallEdge, 1);
+    g.strokeRect(x, y, w, h);
+    g.lineStyle(2, palette.wallTop, 0.45);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y); g.strokePath();
+
+    switch (this.mapId) {
+      case 'neon-city':
+      case 'space-station':
+        g.lineStyle(2, small ? palette.accent3 : palette.accent, small ? 0.8 : 0.55);
+        g.strokeRect(x + 6, y + 6, Math.max(10, w - 12), Math.max(10, h - 12));
+        if (small) {
+          g.beginPath();
+          g.moveTo(x + 8, y + h - 8);
+          g.lineTo(x + w - 8, y + 8);
+          g.strokePath();
+        } else if (tall) {
+          g.fillStyle(palette.accent2, 0.18);
+          g.fillRect(x + w * 0.34, y + 10, w * 0.32, h - 20);
+        } else {
+          g.fillStyle(palette.accent2, 0.18);
+          g.fillRect(x + 10, y + h * 0.34, w - 20, h * 0.32);
+        }
+        break;
+      case 'lava-pit':
+        g.lineStyle(2, palette.accent3, 0.65);
+        g.strokeRect(x + 7, y + 7, Math.max(8, w - 14), Math.max(8, h - 14));
+        if (small) {
+          g.beginPath();
+          g.moveTo(x + 9, y + 9);
+          g.lineTo(x + w - 9, y + h - 9);
+          g.moveTo(x + w - 9, y + 9);
+          g.lineTo(x + 9, y + h - 9);
+          g.strokePath();
+        }
+        break;
+      case 'ice-cavern':
+        g.fillStyle(0xffffff, 0.18);
+        g.fillRect(x + 5, y + 5, w - 10, Math.max(6, h * 0.24));
+        g.lineStyle(2, 0xffffff, 0.35);
+        g.beginPath();
+        g.moveTo(x + 7, y + h * 0.62);
+        g.lineTo(x + w - 7, y + h * 0.38);
+        g.strokePath();
+        break;
+      case 'ancient-ruins':
+      case 'desert-temple':
+        g.lineStyle(1, palette.accent3, 0.45);
+        g.strokeRect(x + 5, y + 5, w - 10, h - 10);
+        if (small) {
+          g.fillStyle(palette.accent2, 0.16);
+          g.fillRect(x + 10, y + 10, w - 20, h - 20);
+        } else {
+          g.lineStyle(1, palette.wallEdge, 0.45);
+          g.beginPath();
+          g.moveTo(x + w / 2, y + 6);
+          g.lineTo(x + w / 2, y + h - 6);
+          g.strokePath();
+        }
+        break;
+      case 'haunted-manor':
+        g.fillStyle(palette.accent, 0.12);
+        g.fillRect(x + 6, y + 6, w - 12, h - 12);
+        g.lineStyle(1, palette.accent3, 0.3);
+        g.strokeRect(x + 8, y + 8, w - 16, h - 16);
+        break;
+      case 'jungle-canopy':
+        g.lineStyle(2, palette.accent2, 0.35);
+        if (small) {
+          g.strokeCircle(x + w / 2, y + h / 2, Math.min(w, h) * 0.24);
+        } else {
+          g.beginPath();
+          g.moveTo(x + w * 0.25, y + h * 0.2);
+          g.lineTo(x + w * 0.7, y + h * 0.75);
+          g.strokePath();
+        }
+        break;
+    }
+  }
+
+  drawCircleWallVisual(g, palette, wall) {
+    g.fillStyle(0x000000, 0.35);
+    g.fillCircle(wall.x + 4, wall.y + 4, wall.r);
+    g.fillStyle(palette.wall, 1);
+    g.fillCircle(wall.x, wall.y, wall.r);
+    g.lineStyle(2, palette.wallEdge, 1);
+    g.strokeCircle(wall.x, wall.y, wall.r);
+
+    switch (this.mapId) {
+      case 'lava-pit':
+        g.lineStyle(3, palette.accent3, 0.6);
+        g.strokeCircle(wall.x, wall.y, wall.r * 0.62);
+        break;
+      case 'ice-cavern':
+        g.fillStyle(0xffffff, 0.2);
+        g.fillCircle(wall.x - wall.r * 0.22, wall.y - wall.r * 0.22, wall.r * 0.34);
+        break;
+      case 'haunted-manor':
+        g.lineStyle(2, palette.accent, 0.38);
+        g.strokeCircle(wall.x, wall.y, wall.r * 0.56);
+        break;
+      case 'jungle-canopy':
+        g.lineStyle(2, palette.accent2, 0.35);
+        g.strokeCircle(wall.x, wall.y, wall.r * 0.42);
+        break;
+    }
   }
 
   updateFromState(state) {
