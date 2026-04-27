@@ -217,6 +217,33 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function softenObstacleForGameplay(obstacle) {
+  if (obstacle.shape === 'circle') {
+    return {
+      ...obstacle,
+      r: Math.max(12, obstacle.r * 0.78),
+    };
+  }
+
+  const scale = Math.min(obstacle.w, obstacle.h) <= 42 ? 0.68 : obstacle.w >= 110 || obstacle.h >= 110 ? 0.84 : 0.76;
+  const newW = obstacle.w * scale;
+  const newH = obstacle.h * scale;
+  return {
+    ...obstacle,
+    x: obstacle.x + (obstacle.w - newW) / 2,
+    y: obstacle.y + (obstacle.h - newH) / 2,
+    w: newW,
+    h: newH,
+  };
+}
+
+function softenMapForGameplay(map) {
+  return {
+    ...map,
+    walls: (map.walls || []).map(softenObstacleForGameplay),
+  };
+}
+
 function createMapDefinition({ id, themeId, visualId = id, name, walls, portals, spawns, frame }) {
   return {
     id,
@@ -485,7 +512,7 @@ const MAP_LIBRARY = [
 
 function generateMatchMap(_playerCount) {
   const template = choice(MAP_LIBRARY);
-  const map = clone(template);
+  const map = softenMapForGameplay(clone(template));
   map.openCells = getAllOpenCells();
   map.portalRadius = PORTAL_RADIUS;
   map.portalCooldownMs = PORTAL_COOLDOWN_MS;
@@ -719,7 +746,7 @@ function getRoundMapData(map) {
 }
 
 function getFallbackMap() {
-  const map = clone(MAP_LIBRARY[0]);
+  const map = softenMapForGameplay(clone(MAP_LIBRARY[0]));
   map.openCells = getAllOpenCells();
   map.portalRadius = PORTAL_RADIUS;
   map.portalCooldownMs = PORTAL_COOLDOWN_MS;

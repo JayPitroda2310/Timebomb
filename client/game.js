@@ -104,6 +104,16 @@ const CHARACTER_OPTIONS = [
     avatarUrl: '/characters/Forest_Ranger_3/PNG/PNG%20Sequences/Idle/0_Forest_Ranger_Idle_000.png',
   },
 ];
+const MAP_TEXTURE_IDS = [
+  'neon-city',
+  'lava-pit',
+  'ice-cavern',
+  'ancient-ruins',
+  'space-station',
+  'desert-temple',
+  'haunted-manor',
+  'jungle-canopy',
+];
 
 // ─── SCREEN HELPERS ──────────────────────────────────────────────────────────
 function showScreen(id) {
@@ -589,6 +599,12 @@ class GameScene extends Phaser.Scene {
         this.load.image(option.textureKey, option.avatarUrl);
       }
     }
+    for (const mapId of MAP_TEXTURE_IDS) {
+      const textureKey = `map-${mapId}`;
+      if (!this.textures.exists(textureKey)) {
+        this.load.image(textureKey, `maps/${mapId}.png`);
+      }
+    }
   }
 
   create() {
@@ -623,6 +639,7 @@ class GameScene extends Phaser.Scene {
   buildMap(data) {
     this.themeId = data?.theme?.visualId || data?.theme?.id || 'forest';
     this.mapId = data?.id || this.themeId;
+    if (this.mapBackdrop) this.mapBackdrop.destroy();
     if (this.mapGfx) this.mapGfx.destroy();
     this.portals.forEach((portal) => {
       portal.container.destroy();
@@ -644,34 +661,46 @@ class GameScene extends Phaser.Scene {
     this.mapGfx = this.add.graphics();
     const g = this.mapGfx;
     const palette = getThemePalette(this.themeId);
+    const mapTextureKey = `map-${this.mapId}`;
 
     this.cameras.main.setBackgroundColor(palette.background);
-    g.fillStyle(palette.shadow || palette.background, 1);
-    g.fillRect(0, 0, MAP_W, MAP_H);
-    this.drawArenaBackdrop(g, palette, data);
+    if (this.textures.exists(mapTextureKey)) {
+      this.mapBackdrop = this.add.image(MAP_W / 2, MAP_H / 2, mapTextureKey);
+      this.mapBackdrop.setDisplaySize(MAP_W, MAP_H);
+      this.mapBackdrop.setAlpha(1);
+      g.fillStyle(0x000000, 0.12);
+      g.fillRect(0, 0, MAP_W, MAP_H);
+    } else {
+      g.fillStyle(palette.shadow || palette.background, 1);
+      g.fillRect(0, 0, MAP_W, MAP_H);
+      this.drawArenaBackdrop(g, palette, data);
+    }
 
-    // Walls
-    for (const wall of data.walls) {
-      if (wall.shape === 'circle') {
-        g.fillStyle(0x000000, 0.45);
-        g.fillCircle(wall.x + 3, wall.y + 3, wall.r);
-        g.fillStyle(palette.wall, 1);
-        g.fillCircle(wall.x, wall.y, wall.r);
-        g.lineStyle(2, palette.wallEdge, 1);
-        g.strokeCircle(wall.x, wall.y, wall.r);
-      } else {
-        g.fillStyle(0x000000, 0.5);
-        g.fillRect(wall.x+4, wall.y+4, wall.w, wall.h);
-        g.fillStyle(palette.wall, 1);
-        g.fillRect(wall.x, wall.y, wall.w, wall.h);
-        g.lineStyle(1, palette.wallEdge, 1);
-        g.strokeRect(wall.x, wall.y, wall.w, wall.h);
-        g.lineStyle(2, palette.wallTop, 0.5);
-        g.beginPath(); g.moveTo(wall.x, wall.y); g.lineTo(wall.x+wall.w, wall.y); g.strokePath();
+    if (!this.textures.exists(mapTextureKey)) {
+      for (const wall of data.walls) {
+        if (wall.shape === 'circle') {
+          g.fillStyle(0x000000, 0.45);
+          g.fillCircle(wall.x + 3, wall.y + 3, wall.r);
+          g.fillStyle(palette.wall, 1);
+          g.fillCircle(wall.x, wall.y, wall.r);
+          g.lineStyle(2, palette.wallEdge, 1);
+          g.strokeCircle(wall.x, wall.y, wall.r);
+        } else {
+          g.fillStyle(0x000000, 0.5);
+          g.fillRect(wall.x + 4, wall.y + 4, wall.w, wall.h);
+          g.fillStyle(palette.wall, 1);
+          g.fillRect(wall.x, wall.y, wall.w, wall.h);
+          g.lineStyle(1, palette.wallEdge, 1);
+          g.strokeRect(wall.x, wall.y, wall.w, wall.h);
+          g.lineStyle(2, palette.wallTop, 0.5);
+          g.beginPath(); g.moveTo(wall.x, wall.y); g.lineTo(wall.x + wall.w, wall.y); g.strokePath();
+        }
       }
     }
 
-    this.drawArenaBorder(g, palette, data);
+    if (!this.textures.exists(mapTextureKey)) {
+      this.drawArenaBorder(g, palette, data);
+    }
 
     for (const wall of data.movingWalls || []) {
       const gfx = this.add.graphics();
